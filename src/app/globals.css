@@ -1,0 +1,157 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 99%;
+    --foreground: 240 10% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 10%;
+    --primary: 262 83% 58%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 5% 96%;
+    --secondary-foreground: 240 10% 10%;
+    --muted: 240 5% 96%;
+    --muted-foreground: 240 4% 46%;
+    --accent: 262 60% 96%;
+    --accent-foreground: 262 83% 40%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 6% 90%;
+    --input: 240 6% 90%;
+    --ring: 262 83% 58%;
+    --radius: 0.75rem;
+    --brand: 262 83% 58%;
+    --brand-foreground: 0 0% 100%;
+    --brand-muted: 262 60% 96%;
+    --success: 142 71% 45%;
+    --warning: 38 92% 50%;
+    --danger: 0 72% 51%;
+    --shadow-soft: 0 1px 3px 0 rgb(0 0 0 / 0.04), 0 1px 2px -1px rgb(0 0 0 / 0.04);
+    --shadow-luxury: 0 4px 24px -4px rgb(0 0 0 / 0.08), 0 2px 8px -2px rgb(0 0 0 / 0.04);
+    --shadow-glow: 0 0 40px -8px hsl(var(--brand) / 0.35);
+  }
+
+  .dark {
+    --background: 240 10% 6%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 8%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 10% 8%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 262 83% 65%;
+    --primary-foreground: 240 10% 6%;
+    --secondary: 240 6% 14%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 6% 14%;
+    --muted-foreground: 240 5% 65%;
+    --accent: 262 40% 16%;
+    --accent-foreground: 262 83% 75%;
+    --destructive: 0 63% 45%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 6% 16%;
+    --input: 240 6% 16%;
+    --ring: 262 83% 65%;
+    --brand: 262 83% 65%;
+    --brand-foreground: 240 10% 6%;
+    --brand-muted: 262 30% 14%;
+    --success: 142 60% 50%;
+    --warning: 38 80% 55%;
+    --danger: 0 63% 50%;
+    --shadow-soft: 0 1px 3px 0 rgb(0 0 0 / 0.2);
+    --shadow-luxury: 0 4px 24px -4px rgb(0 0 0 / 0.4);
+    --shadow-glow: 0 0 48px -8px hsl(var(--brand) / 0.25);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+html[dir="rtl"] {
+  direction: rtl;
+}
+
+html[dir="ltr"] {
+  direction: ltr;
+}
+
+@layer utilities {
+  .gradient-mesh {
+    background:
+      radial-gradient(ellipse 80% 60% at 20% 20%, hsl(var(--brand) / 0.12) 0%, transparent 50%),
+      radial-gradient(ellipse 60% 50% at 80% 30%, hsl(280 80% 60% / 0.08) 0%, transparent 50%),
+      radial-gradient(ellipse 50% 40% at 50% 80%, hsl(220 90% 60% / 0.06) 0%, transparent 50%),
+      hsl(var(--background));
+  }
+
+  .gradient-mesh-dark {
+    background:
+      radial-gradient(ellipse 80% 60% at 20% 20%, hsl(var(--brand) / 0.15) 0%, transparent 50%),
+      radial-gradient(ellipse 60% 50% at 80% 30%, hsl(280 80% 60% / 0.1) 0%, transparent 50%),
+      hsl(var(--background));
+  }
+
+  .animate-glow {
+    animation: glow-pulse 4s ease-in-out infinite;
+  }
+
+  @keyframes glow-pulse {
+    0%, 100% { opacity: 0.4; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(1.05); }
+  }
+
+  .shadow-luxury {
+    box-shadow: var(--shadow-luxury);
+  }
+
+  .shadow-glow {
+    box-shadow: var(--shadow-glow);
+  }
+
+  .glass {
+    @apply bg-background/70 backdrop-blur-xl border border-border/50;
+  }
+
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-brand to-purple-500;
+  }
+
+  .card-hover {
+    @apply transition-all duration-300 hover:shadow-luxury hover:-translate-y-0.5 hover:border-brand/20;
+  }
+}
+
+.marketing-shell {
+  --background: 240 20% 4%;
+  --foreground: 250 33% 94%;
+  --card: 240 18% 8%;
+  --card-foreground: 250 33% 94%;
+  --popover: 240 18% 8%;
+  --popover-foreground: 250 33% 94%;
+  --primary: 252 100% 68%;
+  --primary-foreground: 240 20% 4%;
+  --secondary: 240 16% 12%;
+  --secondary-foreground: 250 33% 94%;
+  --muted: 240 16% 12%;
+  --muted-foreground: 246 12% 66%;
+  --accent: 252 40% 16%;
+  --accent-foreground: 252 100% 80%;
+  --border: 240 20% 18%;
+  --input: 240 20% 18%;
+  --ring: 252 100% 68%;
+  --brand: 252 100% 68%;
+  --brand-foreground: 240 20% 4%;
+  --brand-muted: 252 40% 14%;
+  color: #eceaf5;
+  background: #08080d;
+}

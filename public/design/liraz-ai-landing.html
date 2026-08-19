@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Liraz AI — Build apps and websites by just describing them</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root{
+    --bg: #08080d;
+    --bg-alt: #0d0d16;
+    --surface: #12121e;
+    --surface-2: #171728;
+    --border: #24243a;
+    --text: #eceaf5;
+    --text-dim: #9d9bb4;
+    --text-faint: #6b6a86;
+    --accent-1: #7c5cff;
+    --accent-2: #22d3ee;
+    --accent-3: #ff5cb3;
+    --grad: linear-gradient(120deg, var(--accent-1), var(--accent-2));
+    --radius: 16px;
+  }
+
+  *{ box-sizing: border-box; margin:0; padding:0; }
+  html{ scroll-behavior: smooth; }
+  body{
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  a{ color: inherit; text-decoration: none; }
+  ul{ list-style: none; }
+  img, svg{ display:block; max-width:100%; }
+  .mono{ font-family: 'JetBrains Mono', monospace; }
+
+  .wrap{
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 32px;
+  }
+
+  /* background ambience */
+  .glow{
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(120px);
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0.35;
+  }
+  .glow-1{ width:600px; height:600px; background: var(--accent-1); top: -200px; left: -150px; }
+  .glow-2{ width:500px; height:500px; background: var(--accent-2); top: 200px; right: -200px; opacity:0.22; }
+  .glow-3{ width:500px; height:500px; background: var(--accent-3); bottom: -250px; left: 30%; opacity:0.15; }
+
+  .bg-grid{
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 40%, transparent 100%);
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  main, header, footer{ position: relative; z-index: 1; }
+
+  /* Nav */
+  header{
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    backdrop-filter: blur(14px);
+    background: rgba(8,8,13,0.7);
+    border-bottom: 1px solid var(--border);
+  }
+  nav{
+    display:flex;
+    align-items:center;
+    justify-content: space-between;
+    padding: 18px 32px;
+    max-width: 1180px;
+    margin: 0 auto;
+  }
+  .logo{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    font-weight: 700;
+    font-size: 18px;
+    letter-spacing: -0.02em;
+  }
+  .logo-mark{
+    width: 30px; height: 30px;
+    border-radius: 9px;
+    background: var(--grad);
+    display:flex; align-items:center; justify-content:center;
+    font-family:'JetBrains Mono', monospace;
+    font-weight:700;
+    font-size: 14px;
+    color: #08080d;
+    flex-shrink:0;
+  }
+  .nav-links{
+    display:flex;
+    gap: 32px;
+    font-size: 14.5px;
+    color: var(--text-dim);
+  }
+  .nav-links a:hover{ color: var(--text); }
+  .nav-cta{ display:flex; align-items:center; gap:16px; }
+  .nav-cta .ghost{ font-size: 14.5px; color: var(--text-dim); }
+  .nav-cta .ghost:hover{ color: var(--text); }
+
+  .btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap: 8px;
+    padding: 11px 22px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 14.5px;
+    cursor:pointer;
+    border: 1px solid transparent;
+    transition: transform .15s ease, box-shadow .15s ease, opacity .15s ease;
+    white-space: nowrap;
+  }
+  .btn:hover{ transform: translateY(-1px); }
+  .btn-primary{
+    background: var(--grad);
+    color: #08080d;
+    box-shadow: 0 0 0 0 rgba(124,92,255,0.5);
+  }
+  .btn-primary:hover{ box-shadow: 0 8px 24px -6px rgba(124,92,255,0.55); }
+  .btn-outline{
+    background: rgba(255,255,255,0.03);
+    border-color: var(--border);
+    color: var(--text);
+  }
+  .btn-outline:hover{ background: rgba(255,255,255,0.06); border-color: #35354f; }
+  .btn-lg{ padding: 14px 28px; font-size: 15.5px; border-radius: 12px; }
+
+  section{ padding: 96px 0; }
+  .section-tight{ padding: 64px 0; }
+
+  .eyebrow{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent-2);
+    background: rgba(34,211,238,0.08);
+    border: 1px solid rgba(34,211,238,0.2);
+    padding: 6px 14px;
+    border-radius: 100px;
+    margin-bottom: 22px;
+  }
+  .eyebrow .dot{ width:6px; height:6px; border-radius:50%; background: var(--accent-2); box-shadow: 0 0 8px var(--accent-2); }
+
+  h1{
+    font-size: clamp(38px, 5.5vw, 68px);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1.05;
+    max-width: 820px;
+  }
+  h1 .grad-text{
+    background: var(--grad);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  h2{
+    font-size: clamp(28px, 3.6vw, 42px);
+    font-weight: 800;
+    letter-spacing: -0.025em;
+    line-height: 1.15;
+  }
+  h3{ font-size: 19px; font-weight: 700; letter-spacing: -0.01em; }
+  .lead{
+    font-size: 18px;
+    color: var(--text-dim);
+    max-width: 560px;
+    margin-top: 22px;
+    line-height: 1.65;
+  }
+  .section-head{ max-width: 620px; margin: 0 auto 56px; text-align:center; }
+  .section-head.left{ margin: 0 0 56px; text-align:left; }
+  .section-head p{ color: var(--text-dim); font-size: 16.5px; margin-top: 14px; line-height:1.65; }
+
+  /* HERO */
+  .hero{ padding: 88px 0 40px; text-align:center; }
+  .hero-inner{ display:flex; flex-direction:column; align-items:center; }
+  .hero .lead{ margin-left:auto; margin-right:auto; text-align:center; max-width: 600px; }
+  .hero-actions{ display:flex; gap:14px; margin-top: 36px; flex-wrap:wrap; justify-content:center; }
+  .hero-note{ margin-top: 18px; font-size: 13.5px; color: var(--text-faint); }
+
+  /* prompt-to-app mock */
+  .hero-visual{
+    margin-top: 64px;
+    width: 100%;
+    max-width: 920px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: linear-gradient(180deg, var(--surface), var(--bg-alt));
+    box-shadow: 0 40px 100px -30px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.02) inset;
+    overflow: hidden;
+    text-align: left;
+  }
+  .mock-bar{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(255,255,255,0.015);
+  }
+  .mock-dot{ width:10px; height:10px; border-radius:50%; background:#35354f; }
+  .mock-title{ margin-left: 10px; font-size:12.5px; color: var(--text-faint); font-family:'JetBrains Mono', monospace; }
+  .mock-body{ display:grid; grid-template-columns: 1fr 1.35fr; min-height: 320px; }
+  .mock-chat{ padding: 22px; border-right: 1px solid var(--border); display:flex; flex-direction:column; gap:14px; }
+  .chat-msg{ font-size: 14px; padding: 12px 14px; border-radius: 12px; max-width: 92%; line-height:1.5; }
+  .chat-user{ align-self:flex-end; background: rgba(124,92,255,0.16); border:1px solid rgba(124,92,255,0.3); }
+  .chat-ai{ background: var(--surface-2); border: 1px solid var(--border); color: var(--text-dim); }
+  .chat-ai b{ color: var(--text); font-weight:600; }
+  .typing{ display:flex; gap:4px; padding: 4px 0; }
+  .typing span{ width:6px; height:6px; border-radius:50%; background: var(--accent-2); animation: blink 1.2s infinite ease-in-out; }
+  .typing span:nth-child(2){ animation-delay: .2s; }
+  .typing span:nth-child(3){ animation-delay: .4s; }
+  @keyframes blink{ 0%,80%,100%{ opacity:.2; transform: scale(0.8);} 40%{ opacity:1; transform: scale(1);} }
+
+  .mock-preview{ padding: 22px; background: radial-gradient(ellipse at top, rgba(124,92,255,0.06), transparent 60%); }
+  .preview-frame{ border:1px solid var(--border); border-radius: 12px; overflow:hidden; height:100%; background: var(--bg-alt); }
+  .preview-nav{ display:flex; align-items:center; gap:8px; padding:10px 14px; border-bottom:1px solid var(--border); }
+  .preview-pill{ height:8px; border-radius:4px; background: var(--surface-2); }
+  .preview-content{ padding: 18px; display:flex; flex-direction:column; gap:12px; }
+  .ph-block{ border-radius: 8px; background: var(--surface-2); }
+
+  /* Stats strip */
+  .stats{ display:grid; grid-template-columns: repeat(4,1fr); gap: 24px; padding: 48px 0; border-top:1px solid var(--border); border-bottom:1px solid var(--border); }
+  .stat b{ display:block; font-size: 30px; font-weight:800; background: var(--grad); -webkit-background-clip:text; background-clip:text; color:transparent; letter-spacing:-0.02em; }
+  .stat span{ font-size: 13.5px; color: var(--text-dim); }
+
+  /* Features grid */
+  .grid-3{ display:grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  .card{
+    background: linear-gradient(180deg, var(--surface), rgba(18,18,30,0.4));
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px;
+    transition: border-color .2s ease, transform .2s ease;
+  }
+  .card:hover{ border-color: #37375a; transform: translateY(-3px); }
+  .icon-tile{
+    width: 42px; height:42px;
+    border-radius: 11px;
+    display:flex; align-items:center; justify-content:center;
+    margin-bottom: 18px;
+    background: rgba(124,92,255,0.12);
+    border: 1px solid rgba(124,92,255,0.25);
+  }
+  .icon-tile svg{ width:20px; height:20px; }
+  .card p{ color: var(--text-dim); font-size: 14.5px; margin-top: 10px; line-height:1.6; }
+
+  /* How it works */
+  .steps{ display:grid; grid-template-columns: repeat(3,1fr); gap: 28px; counter-reset: step; }
+  .step{ position:relative; padding-top: 8px; }
+  .step .num{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--accent-2);
+    border: 1px solid rgba(34,211,238,0.3);
+    background: rgba(34,211,238,0.08);
+    width: 34px; height:34px;
+    border-radius:9px;
+    display:flex; align-items:center; justify-content:center;
+    margin-bottom: 18px;
+  }
+  .step p{ color: var(--text-dim); font-size: 14.5px; margin-top:10px; line-height:1.6; }
+  .step-line{ position:absolute; top:17px; left: 34px; width: calc(100% - 34px); height:1px; background: linear-gradient(90deg, var(--border), transparent); }
+
+  /* Showcase / prompt examples */
+  .prompt-grid{ display:grid; grid-template-columns: repeat(2,1fr); gap:14px; }
+  .prompt-chip{
+    display:flex; align-items:center; gap:12px;
+    padding: 16px 18px;
+    background: var(--surface);
+    border:1px solid var(--border);
+    border-radius: 12px;
+    font-size: 14px;
+    color: var(--text-dim);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .prompt-chip svg{ flex-shrink:0; color: var(--accent-2); }
+
+  /* Testimonials */
+  .t-grid{ display:grid; grid-template-columns: repeat(3,1fr); gap:20px; }
+  .t-card{ background: var(--surface); border:1px solid var(--border); border-radius: var(--radius); padding: 26px; }
+  .t-card p{ font-size: 14.5px; color: var(--text-dim); line-height:1.65; }
+  .t-person{ display:flex; align-items:center; gap:12px; margin-top:20px; }
+  .t-avatar{ width:38px; height:38px; border-radius:50%; background: var(--grad); flex-shrink:0; }
+  .t-person b{ font-size: 14px; display:block; }
+  .t-person span{ font-size: 12.5px; color: var(--text-faint); }
+
+  /* Pricing */
+  .price-grid{ display:grid; grid-template-columns: repeat(3,1fr); gap: 20px; align-items:stretch; }
+  .price-card{ background: var(--surface); border:1px solid var(--border); border-radius: var(--radius); padding: 30px; display:flex; flex-direction:column; }
+  .price-card.featured{ border-color: var(--accent-1); background: linear-gradient(180deg, rgba(124,92,255,0.09), var(--surface)); position:relative; }
+  .price-tag{ position:absolute; top:-13px; right: 24px; background: var(--grad); color:#08080d; font-size:11.5px; font-weight:700; padding:5px 12px; border-radius:100px; letter-spacing:0.02em; }
+  .price-name{ font-size:15px; color: var(--text-dim); font-weight:600; }
+  .price-amount{ font-size: 42px; font-weight:800; letter-spacing:-0.03em; margin-top:10px; }
+  .price-amount span{ font-size:15px; font-weight:500; color: var(--text-faint); }
+  .price-desc{ font-size:13.5px; color: var(--text-faint); margin-top:6px; }
+  .price-feats{ margin-top:24px; display:flex; flex-direction:column; gap:12px; flex:1; }
+  .price-feats li{ display:flex; gap:10px; font-size:13.75px; color: var(--text-dim); align-items:flex-start; }
+  .price-feats svg{ flex-shrink:0; margin-top:2px; color: var(--accent-2); }
+  .price-card .btn{ margin-top:26px; width:100%; }
+
+  /* FAQ */
+  .faq{ max-width: 760px; margin:0 auto; }
+  .faq-item{ border-bottom:1px solid var(--border); padding: 22px 0; }
+  .faq-q{ display:flex; align-items:center; justify-content:space-between; cursor:pointer; font-weight:600; font-size:15.5px; }
+  .faq-q .plus{ font-size:20px; color: var(--text-faint); transition: transform .2s ease; flex-shrink:0; margin-left: 20px; }
+  .faq-item.open .faq-q .plus{ transform: rotate(45deg); color: var(--accent-2); }
+  .faq-a{ max-height:0; overflow:hidden; transition: max-height .25s ease; }
+  .faq-item.open .faq-a{ max-height: 220px; }
+  .faq-a p{ padding-top:14px; color: var(--text-dim); font-size:14.5px; line-height:1.65; max-width: 640px; }
+
+  /* CTA band */
+  .cta-band{
+    text-align:center;
+    padding: 72px 48px;
+    border-radius: 28px;
+    background: linear-gradient(145deg, rgba(124,92,255,0.14), rgba(34,211,238,0.08));
+    border: 1px solid rgba(124,92,255,0.28);
+    position: relative;
+    overflow:hidden;
+  }
+  .cta-band h2{ max-width: 560px; margin: 0 auto; }
+  .cta-band .lead{ margin-left:auto; margin-right:auto; }
+  .cta-band .hero-actions{ margin-top: 30px; }
+
+  footer{ border-top: 1px solid var(--border); padding: 56px 0 32px; margin-top: 40px; }
+  .foot-grid{ display:grid; grid-template-columns: 1.4fr repeat(3,1fr); gap: 32px; padding-bottom: 40px; }
+  .foot-brand p{ color: var(--text-faint); font-size:13.5px; margin-top:14px; max-width:260px; line-height:1.6; }
+  .foot-col h4{ font-size:13px; color: var(--text-faint); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:16px; }
+  .foot-col ul{ display:flex; flex-direction:column; gap:11px; }
+  .foot-col a{ font-size:14px; color: var(--text-dim); }
+  .foot-col a:hover{ color: var(--text); }
+  .foot-bottom{ display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--border); padding-top:24px; font-size:13px; color: var(--text-faint); flex-wrap:wrap; gap:12px; }
+
+  @media (max-width: 900px){
+    .nav-links{ display:none; }
+    .grid-3, .t-grid, .price-grid, .steps{ grid-template-columns: 1fr; }
+    .stats{ grid-template-columns: repeat(2,1fr); }
+    .mock-body{ grid-template-columns: 1fr; }
+    .mock-chat{ border-right:none; border-bottom:1px solid var(--border); }
+    .prompt-grid{ grid-template-columns: 1fr; }
+    .foot-grid{ grid-template-columns: 1fr 1fr; }
+    section{ padding: 64px 0; }
+  }
+</style>
+</head>
+<body>
+
+<div class="glow glow-1"></div>
+<div class="glow glow-2"></div>
+<div class="glow glow-3"></div>
+<div class="bg-grid"></div>
+
+<header>
+  <nav>
+    <div class="logo">
+      <div class="logo-mark">L</div>
+      Liraz AI
+    </div>
+    <ul class="nav-links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#how">How it works</a></li>
+      <li><a href="#showcase">Examples</a></li>
+      <li><a href="#pricing">Pricing</a></li>
+      <li><a href="#faq">FAQ</a></li>
+    </ul>
+    <div class="nav-cta">
+      <a class="ghost" href="#">Log in</a>
+      <a class="btn btn-primary" href="#pricing">Start building free</a>
+    </div>
+  </nav>
+</header>
+
+<main>
+  <div class="wrap">
+    <section class="hero">
+      <div class="hero-inner">
+        <div class="eyebrow"><span class="dot"></span> Now with one-click publishing</div>
+        <h1>Describe your idea. <span class="grad-text">Get a real app.</span> No code required.</h1>
+        <p class="lead">Liraz AI turns plain-language descriptions into working websites and apps — design, logic, and hosting included. If you can explain what you want, you can build it.</p>
+        <div class="hero-actions">
+          <a class="btn btn-primary btn-lg" href="#pricing">Start building free</a>
+          <a class="btn btn-outline btn-lg" href="#showcase">See examples →</a>
+        </div>
+        <div class="hero-note">No credit card required · Free plan available · Publish in minutes</div>
+
+        <div class="hero-visual">
+          <div class="mock-bar">
+            <div class="mock-dot"></div><div class="mock-dot"></div><div class="mock-dot"></div>
+            <div class="mock-title">liraz.ai/build</div>
+          </div>
+          <div class="mock-body">
+            <div class="mock-chat">
+              <div class="chat-msg chat-user">Build me a booking site for my yoga studio, with class schedules and online payments.</div>
+              <div class="chat-msg chat-ai"><b>Liraz AI</b> — Got it. I've created a homepage, a class schedule, and a booking flow with payments. Want a dark or light look?</div>
+              <div class="chat-msg chat-user">Dark, and add a section for instructor bios.</div>
+              <div class="chat-msg chat-ai">
+                <div class="typing"><span></span><span></span><span></span></div>
+              </div>
+            </div>
+            <div class="mock-preview">
+              <div class="preview-frame">
+                <div class="preview-nav">
+                  <div class="preview-pill" style="width:60px;"></div>
+                  <div class="preview-pill" style="width:40px;"></div>
+                  <div class="preview-pill" style="width:40px;"></div>
+                </div>
+                <div class="preview-content">
+                  <div class="ph-block" style="height:70px;"></div>
+                  <div class="ph-block" style="height:16px; width:60%;"></div>
+                  <div class="ph-block" style="height:12px; width:85%;"></div>
+                  <div style="display:flex; gap:10px; margin-top:6px;">
+                    <div class="ph-block" style="height:80px; flex:1;"></div>
+                    <div class="ph-block" style="height:80px; flex:1;"></div>
+                    <div class="ph-block" style="height:80px; flex:1;"></div>
+                  </div>
+                  <div class="ph-block" style="height:34px; width:140px; margin-top:8px; background:var(--grad); opacity:0.85;"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="stats">
+      <div class="stat"><b>40,000+</b><span>apps &amp; sites built</span></div>
+      <div class="stat"><b>&lt; 5 min</b><span>average time to first draft</span></div>
+      <div class="stat"><b>0</b><span>lines of code required</span></div>
+      <div class="stat"><b>98%</b><span>would build again</span></div>
+    </div>
+
+    <section id="features">
+      <div class="section-head">
+        <div class="eyebrow"><span class="dot"></span> Features</div>
+        <h2>Everything you need, none of the setup</h2>
+        <p>Liraz AI handles the parts that usually require a developer — so you can stay focused on your idea.</p>
+      </div>
+      <div class="grid-3">
+        <div class="card">
+          <div class="icon-tile"><svg viewBox="0 0 24 24" fill="none" stroke="#7c5cff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9l-4 3 4 3M16 9l4 3-4 3M13 5l-2 14"/></svg></div>
+          <h3>Just describe it</h3>
+          <p>Type what you want in plain language. Liraz AI writes the structure, design, and logic behind the scenes — no technical terms needed.</p>
+        </div>
+        <div class="card">
+          <div class="icon-tile"><svg viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8M12 18v3"/></svg></div>
+          <h3>See it live as you go</h3>
+          <p>Every change shows up instantly in a real, working preview — so you always know exactly what you're getting before you publish.</p>
+        </div>
+        <div class="card">
+          <div class="icon-tile"><svg viewBox="0 0 24 24" fill="none" stroke="#ff5cb3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+          <h3>Edit anything, visually</h3>
+          <p>Click on any element to tweak text, colors, or layout by hand — no code editor, no config files, no confusion.</p>
+        </div>
+        <div class="card">
+          <div class="icon-tile"><svg viewBox="0 0 24 24" fill="none" stroke="#7c5cff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></div>
+          <h3>Built-in logic &amp; data</h3>
+          <p>Forms, bookings, logins, and payments work out of the box — Liraz AI wires up the functional pieces most builders leave to you.</p>
+        </div>
+        <div class="card">
+          <div class="icon-tile"><svg viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12l7-9 4 5 4-3 3 7"/><path d="M3 18h18"/></svg></div>
+          <h3>Responsive by default</h3>
+          <p>Every site adapts automatically to phones, tablets, and desktops — nothing extra to configure or test.</p>
+        </div>
+        <div class="card">
+          <div class="icon-tile"><svg viewBox="0 0 24 24" fill="none" stroke="#ff5cb3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+          <h3>Publish in one click</h3>
+          <p>When it's ready, hit publish. Hosting, a live domain, and SSL are handled for you — no separate setup required.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="how">
+      <div class="section-head">
+        <div class="eyebrow"><span class="dot"></span> How it works</div>
+        <h2>From idea to live site in three steps</h2>
+      </div>
+      <div class="steps">
+        <div class="step">
+          <div class="step-line"></div>
+          <div class="num">01</div>
+          <h3>Describe your idea</h3>
+          <p>Tell Liraz AI what you're building and who it's for — a portfolio, a shop, a booking tool, anything.</p>
+        </div>
+        <div class="step">
+          <div class="step-line"></div>
+          <div class="num">02</div>
+          <h3>Refine it by chatting</h3>
+          <p>Ask for changes the way you'd ask a designer. Watch the preview update in real time.</p>
+        </div>
+        <div class="step">
+          <div class="num">03</div>
+          <h3>Publish and share</h3>
+          <p>One click gives you a live link on the web — ready to share, connect a domain, or keep editing later.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="showcase">
+      <div class="section-head left">
+        <div class="eyebrow"><span class="dot"></span> Examples</div>
+        <h2>What people build with Liraz AI</h2>
+      </div>
+      <div class="prompt-grid">
+        <div class="prompt-chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"/></svg> "A portfolio site for my photography, dark and minimal"</div>
+        <div class="prompt-chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"/></svg> "An online shop for handmade candles with checkout"</div>
+        <div class="prompt-chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"/></svg> "A landing page for my podcast with an email signup"</div>
+        <div class="prompt-chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"/></svg> "A simple app to track my gym workouts each week"</div>
+      </div>
+    </section>
+
+    <section id="testimonials">
+      <div class="section-head">
+        <div class="eyebrow"><span class="dot"></span> Placeholder testimonials — swap in real ones</div>
+        <h2>Loved by people building their first project</h2>
+      </div>
+      <div class="t-grid">
+        <div class="t-card">
+          <p>"I had an idea for a small business site and no idea how to make it. Liraz AI got me a working draft in one afternoon."</p>
+          <div class="t-person"><div class="t-avatar"></div><div><b>Sample user</b><span>Small business owner</span></div></div>
+        </div>
+        <div class="t-card">
+          <p>"The chat-based editing is what sold me — I could just say 'move this up' or 'make it blue' and it happened."</p>
+          <div class="t-person"><div class="t-avatar"></div><div><b>Sample user</b><span>Freelance creative</span></div></div>
+        </div>
+        <div class="t-card">
+          <p>"Went from a rough idea to a published booking site for my studio in under an hour, no developer needed."</p>
+          <div class="t-person"><div class="t-avatar"></div><div><b>Sample user</b><span>Studio owner</span></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="pricing">
+      <div class="section-head">
+        <div class="eyebrow"><span class="dot"></span> Pricing</div>
+        <h2>Start free. Upgrade when you're ready to publish.</h2>
+        <p>Placeholder tiers — adjust names and prices to match your actual plans.</p>
+      </div>
+      <div class="price-grid">
+        <div class="price-card">
+          <div class="price-name">Free</div>
+          <div class="price-amount">$0</div>
+          <div class="price-desc">Try it out, no card needed</div>
+          <ul class="price-feats">
+            <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg> 3 active projects</li>
+            <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg> Chat-based building</li>
+            <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg> Shared preview link</li>
+          </ul>
+          <a class="btn btn-outline" href="#">Get started</a>
+        </div>
+        <div class="price-card featured">
+          <div class="price-tag">Most popular</div>
+          <div class="price-name">Pro</div>
+          <div class="price-amount">$19<span>/mo</span></div>
+          <div class="price-desc">For real projects you want live</div>
+          <ul class="price-feats">
+            <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg> Unlimited projects</li>
+            <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg> One-click publishing</li>
+            <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg> Custom domain</li>
+            <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg> Forms, logins &amp; payments</li>
+          </ul>
+          <a class="btn btn-primary" href="#">Start building free</a>
+        </div>
+        <div class="price-card">
+          <div class="price-name">Team</div>
+          <div class="price-amount">$49<span>/mo</span></div>
+          <div class="price-desc">Build and publish together</div>
+          <ul class="price-feats">
+            <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg> Everything in Pro</li>
+            <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg> 5 team seats</li>
+            <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg> Shared project library</li>
+          </ul>
+          <a class="btn btn-outline" href="#">Contact sales</a>
+        </div>
+      </div>
+    </section>
+
+    <section id="faq">
+      <div class="section-head">
+        <div class="eyebrow"><span class="dot"></span> FAQ</div>
+        <h2>Questions people ask</h2>
+      </div>
+      <div class="faq">
+        <div class="faq-item open">
+          <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">Do I need to know how to code?<span class="plus">+</span></div>
+          <div class="faq-a"><p>No. Liraz AI is built for people with no programming background — you describe what you want in everyday language and the AI handles the technical work.</p></div>
+        </div>
+        <div class="faq-item">
+          <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">What kinds of things can I build?<span class="plus">+</span></div>
+          <div class="faq-a"><p>Websites, landing pages, simple web apps, booking tools, online stores, and internal tools — anything you can describe in a sentence or two is a good starting point.</p></div>
+        </div>
+        <div class="faq-item">
+          <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">Can I use my own domain?<span class="plus">+</span></div>
+          <div class="faq-a"><p>Yes. Paid plans let you connect a custom domain, or you can publish instantly to a free liraz.ai subdomain.</p></div>
+        </div>
+        <div class="faq-item">
+          <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">Can I export or take my project elsewhere?<span class="plus">+</span></div>
+          <div class="faq-a"><p>Yes, projects can be exported so you're never locked in — though most people just keep editing with Liraz AI directly.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="cta-band">
+        <h2>Have an idea? Let's build it.</h2>
+        <p class="lead">Start for free — no coding, no setup, no waiting on a developer.</p>
+        <div class="hero-actions">
+          <a class="btn btn-primary btn-lg" href="#pricing">Start building free</a>
+          <a class="btn btn-outline btn-lg" href="#how">How it works →</a>
+        </div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div class="foot-brand">
+        <div class="logo"><div class="logo-mark">L</div>Liraz AI</div>
+        <p>Describe it, and Liraz AI builds it — websites and apps for anyone, no programming knowledge required.</p>
+      </div>
+      <div class="foot-col">
+        <h4>Product</h4>
+        <ul>
+          <li><a href="#features">Features</a></li>
+          <li><a href="#how">How it works</a></li>
+          <li><a href="#pricing">Pricing</a></li>
+          <li><a href="#showcase">Examples</a></li>
+        </ul>
+      </div>
+      <div class="foot-col">
+        <h4>Company</h4>
+        <ul>
+          <li><a href="#">About</a></li>
+          <li><a href="#">Blog</a></li>
+          <li><a href="#">Contact</a></li>
+        </ul>
+      </div>
+      <div class="foot-col">
+        <h4>Legal</h4>
+        <ul>
+          <li><a href="#">Privacy</a></li>
+          <li><a href="#">Terms</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="foot-bottom">
+      <span>© 2026 Liraz AI. All rights reserved.</span>
+      <span>Placeholder content — replace before publishing.</span>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

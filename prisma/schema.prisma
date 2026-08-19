@@ -1,0 +1,933 @@
+// Liraz AI Builder — Database Schema
+// All brand/pricing/quota values are stored in SystemSettings, not hardcoded.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum GlobalRole {
+  VISITOR
+  REGISTERED_USER
+  PAYING_CUSTOMER
+  TEAM_MEMBER
+  SUPPORT_AGENT
+  ADMINISTRATOR
+  SUPER_ADMINISTRATOR
+}
+
+enum ProjectRole {
+  OWNER
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+enum ProjectStatus {
+  DRAFT
+  ACTIVE
+  READ_ONLY
+  SUSPENDED
+  ARCHIVED
+}
+
+enum ProjectType {
+  WEBSITE
+  LANDING_PAGE
+  ECOMMERCE
+  BLOG
+  PORTFOLIO
+  BOOKING
+  CUSTOMER_PORTAL
+  DASHBOARD
+  WEB_APP
+  PWA
+  MOBILE_APP
+}
+
+enum Locale {
+  HE
+  EN
+}
+
+enum Direction {
+  RTL
+  LTR
+}
+
+enum SubscriptionStatus {
+  PENDING
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  UNPAID
+  PAUSED
+  READ_ONLY
+}
+
+enum BillingInterval {
+  MONTHLY
+  YEARLY
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+  DISPUTED
+}
+
+enum DeploymentStatus {
+  PENDING
+  BUILDING
+  DEPLOYING
+  LIVE
+  FAILED
+  ROLLED_BACK
+}
+
+enum DeploymentEnvironment {
+  DEVELOPMENT
+  PREVIEW
+  PRODUCTION
+}
+
+enum DomainStatus {
+  PENDING
+  VERIFYING
+  ACTIVE
+  FAILED
+  DISCONNECTED
+}
+
+enum AIRequestStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  BLOCKED
+}
+
+enum BuildJobKind {
+  PLAN
+  BUILD
+  EDIT
+  QA
+}
+
+enum BuildJobStatus {
+  PENDING
+  PLANNING
+  AWAITING_APPROVAL
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum BuildTaskStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  NEEDS_APPROVAL
+  FIXED
+  CANCELLED
+}
+
+enum ChatMessageKind {
+  USER
+  ASSISTANT
+  PLAN
+  ACTIVITY
+  FILES
+  READY
+  ERROR
+  SYSTEM
+}
+
+enum AIProviderType {
+  OPENAI
+  ANTHROPIC
+  GOOGLE
+  MOCK
+}
+
+enum SupportAccessStatus {
+  PENDING
+  APPROVED
+  ACTIVE
+  EXPIRED
+  REVOKED
+  DENIED
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_CUSTOMER
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum NotificationType {
+  SYSTEM
+  BILLING
+  DEPLOYMENT
+  AI_USAGE
+  TEAM
+  SUPPORT
+  SECURITY
+}
+
+enum AuditActionType {
+  USER_LOGIN
+  USER_LOGOUT
+  USER_REGISTER
+  PASSWORD_RESET
+  MFA_ENABLED
+  MFA_DISABLED
+  SUBSCRIPTION_CREATED
+  SUBSCRIPTION_CANCELED
+  SUBSCRIPTION_UPDATED
+  PAYMENT_SUCCEEDED
+  PAYMENT_FAILED
+  PAYMENT_REFUNDED
+  DISPUTE_OPENED
+  PROJECT_CREATED
+  PROJECT_UPDATED
+  PROJECT_DELETED
+  PROJECT_PUBLISHED
+  PROJECT_ROLLBACK
+  AI_REQUEST
+  ADMIN_ACTION
+  SUPPORT_ACCESS_GRANTED
+  SUPPORT_ACCESS_REVOKED
+  SETTINGS_CHANGED
+  USER_BLOCKED
+  USER_UNBLOCKED
+  DOMAIN_CONNECTED
+  DOMAIN_DISCONNECTED
+  EXPORT_REQUESTED
+  ACCOUNT_DELETED
+}
+
+// ─── Users & Auth ────────────────────────────────────────────────────────────
+
+model User {
+  id                String     @id @default(cuid())
+  email             String     @unique
+  emailVerified     DateTime?
+  name              String?
+  image             String?
+  passwordHash      String?
+  globalRole        GlobalRole @default(REGISTERED_USER)
+  locale            Locale     @default(HE)
+  mfaEnabled        Boolean    @default(false)
+  mfaSecret         String?
+  isBlocked         Boolean    @default(false)
+  blockedReason     String?
+  blockedAt         DateTime?
+  lastLoginAt       DateTime?
+  lastLoginIp       String?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  deletedAt         DateTime?
+
+  accounts          Account[]
+  sessions          Session[]
+  memberships       Membership[]
+  ownedOrgs         Organization[] @relation("OrgOwner")
+  subscriptions     Subscription[]
+  aiRequests        AIRequest[]
+  notifications     Notification[]
+  supportTickets    SupportTicket[] @relation("TicketCreator")
+  assignedTickets   SupportTicket[] @relation("TicketAssignee")
+  supportAccessAsAgent SupportAccessRequest[] @relation("SupportAgent")
+  supportAccessAsCustomer SupportAccessRequest[] @relation("SupportCustomer")
+  adminActions      AdminAction[]
+  auditLogs         AuditLog[]
+  usageRecords      UsageRecord[]
+
+  @@index([email])
+  @@index([globalRole])
+  @@index([isBlocked])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  ipAddress    String?
+  userAgent    String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── Organizations & Teams ───────────────────────────────────────────────────
+
+model Organization {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  ownerId     String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  owner       User         @relation("OrgOwner", fields: [ownerId], references: [id])
+  memberships Membership[]
+  projects    Project[]
+  subscriptions Subscription[]
+  usageRecords UsageRecord[]
+
+  @@index([ownerId])
+  @@index([slug])
+}
+
+model Membership {
+  id             String      @id @default(cuid())
+  userId         String
+  organizationId String
+  projectRole    ProjectRole @default(VIEWER)
+  invitedAt      DateTime    @default(now())
+  acceptedAt     DateTime?
+  invitedBy      String?
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+}
+
+// ─── Projects ──────────────────────────────────────────────────────────────────
+
+model Project {
+  id             String        @id @default(cuid())
+  organizationId String
+  name           String
+  slug           String
+  description    String?       @db.Text
+  type           ProjectType   @default(WEBSITE)
+  status         ProjectStatus @default(DRAFT)
+  locale         Locale        @default(HE)
+  direction      Direction     @default(RTL)
+  subdomain      String?       @unique
+  publishedUrl   String?
+  thumbnailUrl   String?
+  settings       Json          @default("{}")
+  seoDefaults    Json          @default("{}")
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  versions     ProjectVersion[]
+  pages        Page[]
+  assets       Asset[]
+  domains      Domain[]
+  deployments  Deployment[]
+  aiRequests   AIRequest[]
+  leads        ProjectLead[]
+  buildJobs    BuildJob[]
+  chatMessages ProjectChatMessage[]
+  appRecords   AppRecord[]
+
+  @@unique([organizationId, slug])
+  @@index([organizationId])
+  @@index([status])
+  @@index([subdomain])
+}
+
+model ProjectVersion {
+  id          String   @id @default(cuid())
+  projectId   String
+  version     Int
+  label       String?
+  description String?  @db.Text
+  snapshot    Json
+  createdBy   String?
+  isPublished Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, version])
+  @@index([projectId])
+}
+
+model Page {
+  id          String    @id @default(cuid())
+  projectId   String
+  slug        String
+  title       String
+  locale      Locale    @default(HE)
+  direction   Direction @default(RTL)
+  components  Json      @default("[]")
+  seo         Json      @default("{}")
+  sortOrder   Int       @default(0)
+  isHomePage  Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, slug])
+  @@index([projectId])
+}
+
+model ProjectLead {
+  id        String   @id @default(cuid())
+  projectId String
+  name      String
+  email     String?
+  phone     String?
+  message   String?  @db.Text
+  type      String   @default("contact")
+  status    String   @default("NEW")
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([createdAt])
+}
+
+model BuildJob {
+  id              String        @id @default(cuid())
+  projectId       String
+  userId          String
+  kind            BuildJobKind
+  status          BuildJobStatus @default(PENDING)
+  prompt          String         @db.Text
+  spec            Json?
+  cancelRequested Boolean        @default(false)
+  errorMessage    String?
+  result          Json?
+  startedAt       DateTime       @default(now())
+  completedAt     DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  project  Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks    BuildTask[]
+  messages ProjectChatMessage[]
+
+  @@index([projectId, status])
+  @@index([projectId, createdAt])
+}
+
+model BuildTask {
+  id          String          @id @default(cuid())
+  jobId       String
+  projectId   String
+  key         String
+  title       String
+  description String          @db.Text
+  status      BuildTaskStatus @default(PENDING)
+  sortOrder   Int
+  startedAt   DateTime?
+  completedAt DateTime?
+  detail      String?         @db.Text
+  metadata    Json            @default("{}")
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  job BuildJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, key])
+  @@index([projectId])
+}
+
+model ProjectChatMessage {
+  id        String          @id @default(cuid())
+  projectId String
+  jobId     String?
+  role      String
+  kind      ChatMessageKind @default(ASSISTANT)
+  content   String          @db.Text
+  payload   Json            @default("{}")
+  createdAt DateTime        @default(now())
+
+  project Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  job     BuildJob? @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, createdAt])
+}
+
+model AppRecord {
+  id        String   @id @default(cuid())
+  projectId String
+  kind      String
+  slug      String?
+  title     String?
+  status    String   @default("ACTIVE")
+  data      Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, kind])
+  @@index([projectId, kind, slug])
+}
+
+model Asset {
+  id          String   @id @default(cuid())
+  projectId   String
+  filename    String
+  mimeType    String
+  sizeBytes   Int
+  storageKey  String
+  url         String?
+  alt         String?
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([storageKey])
+}
+
+// ─── Domains & Deployments ─────────────────────────────────────────────────────
+
+model Domain {
+  id                String       @id @default(cuid())
+  projectId         String
+  hostname          String       @unique
+  status            DomainStatus @default(PENDING)
+  isPrimary         Boolean      @default(false)
+  sslStatus         String?
+  verificationToken String?
+  verifiedAt        DateTime?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+model Deployment {
+  id            String                @id @default(cuid())
+  projectId     String
+  versionId     String?
+  environment   DeploymentEnvironment @default(PREVIEW)
+  status        DeploymentStatus      @default(PENDING)
+  url           String?
+  buildLogs     String?               @db.Text
+  errorMessage  String?
+  deployedBy    String?
+  startedAt     DateTime              @default(now())
+  completedAt   DateTime?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([status])
+}
+
+// ─── Billing ───────────────────────────────────────────────────────────────────
+
+model Plan {
+  id                 String   @id @default(cuid())
+  name               String
+  slug               String   @unique
+  description        String?  @db.Text
+  monthlyPriceUsd    Int      // cents
+  yearlyPriceUsd     Int      // cents
+  paypalProductId    String?
+  paypalMonthlyPlanId String?
+  paypalYearlyPlanId  String?
+  trialDays          Int      @default(14)
+  isActive           Boolean  @default(true)
+  sortOrder          Int      @default(0)
+  features           Json     @default("[]")
+  quotas             Json     @default("{}")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  subscriptions Subscription[]
+
+  @@index([isActive])
+}
+
+model Subscription {
+  id                   String             @id @default(cuid())
+  userId               String
+  organizationId       String?
+  planId               String
+  status               SubscriptionStatus @default(PENDING)
+  interval             BillingInterval    @default(MONTHLY)
+  paypalPayerId        String?
+  paypalSubscriptionId String?            @unique
+  paypalPlanId         String?
+  currentPeriodStart   DateTime?
+  currentPeriodEnd     DateTime?
+  trialEndsAt          DateTime?
+  canceledAt           DateTime?
+  cancelAtPeriodEnd    Boolean            @default(false)
+  readOnlyUntil        DateTime?
+  couponId             String?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id])
+  plan         Plan          @relation(fields: [planId], references: [id])
+  coupon       Coupon?       @relation(fields: [couponId], references: [id])
+  payments     Payment[]
+  invoices     Invoice[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([paypalPayerId])
+}
+
+model Payment {
+  id                  String        @id @default(cuid())
+  subscriptionId      String
+  amountUsd           Int
+  currency            String        @default("usd")
+  status              PaymentStatus @default(PENDING)
+  paypalCaptureId     String?       @unique
+  paypalSaleId        String?
+  paypalTransactionId String?
+  failureReason       String?
+  paidAt              DateTime?
+  createdAt           DateTime      @default(now())
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId])
+  @@index([status])
+}
+
+model Invoice {
+  id               String   @id @default(cuid())
+  subscriptionId   String
+  paypalInvoiceId  String?  @unique
+  number           String?
+  amountUsd        Int
+  taxUsd           Int      @default(0)
+  currency         String   @default("usd")
+  pdfUrl           String?
+  hostedUrl        String?
+  periodStart      DateTime?
+  periodEnd        DateTime?
+  createdAt        DateTime @default(now())
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId])
+}
+
+model Coupon {
+  id              String    @id @default(cuid())
+  code            String    @unique
+  description     String?
+  percentOff      Int?
+  amountOffUsd    Int?
+  maxRedemptions  Int?
+  redemptionCount Int       @default(0)
+  validFrom       DateTime  @default(now())
+  validUntil      DateTime?
+  isActive        Boolean   @default(true)
+  paypalDiscountId String?
+  createdAt       DateTime  @default(now())
+
+  subscriptions Subscription[]
+
+  @@index([code])
+  @@index([isActive])
+}
+
+model PayPalWebhookEvent {
+  id               String    @id @default(cuid())
+  paypalEventId    String    @unique
+  eventType        String
+  status           String    @default("received")
+  paypalResourceId String?
+  payload          Json
+  processedAt      DateTime?
+  errorMessage     String?
+  createdAt        DateTime  @default(now())
+
+  @@index([eventType])
+  @@index([createdAt])
+}
+
+// ─── Usage & AI ────────────────────────────────────────────────────────────────
+
+model UsageRecord {
+  id             String   @id @default(cuid())
+  userId         String
+  organizationId String?
+  metric         String
+  value          Float
+  periodStart    DateTime
+  periodEnd      DateTime
+  metadata       Json     @default("{}")
+  createdAt      DateTime @default(now())
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id])
+
+  @@index([userId, metric, periodStart])
+  @@index([organizationId, metric])
+}
+
+model AIRequest {
+  id           String          @id @default(cuid())
+  userId       String
+  projectId    String?
+  provider     AIProviderType  @default(MOCK)
+  model        String?
+  prompt       String          @db.Text
+  response     String?         @db.Text
+  status       AIRequestStatus @default(PENDING)
+  tokensUsed   Int             @default(0)
+  costUsd      Float           @default(0)
+  errorMessage String?
+  metadata     Json            @default("{}")
+  createdAt    DateTime        @default(now())
+  completedAt  DateTime?
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id])
+
+  @@index([userId])
+  @@index([projectId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model AIProviderConfig {
+  id           String         @id @default(cuid())
+  name         String
+  type         AIProviderType
+  isActive     Boolean        @default(false)
+  isDefault    Boolean        @default(false)
+  apiKeyEnvVar String
+  models       Json           @default("[]")
+  settings     Json           @default("{}")
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([isActive])
+  @@index([isDefault])
+}
+
+// ─── Templates ─────────────────────────────────────────────────────────────────
+
+model Template {
+  id          String      @id @default(cuid())
+  name        String
+  slug        String      @unique
+  description String?     @db.Text
+  category    String
+  type        ProjectType @default(WEBSITE)
+  thumbnailUrl String?
+  previewUrl  String?
+  structure   Json        @default("{}")
+  isActive    Boolean     @default(true)
+  isPremium   Boolean     @default(false)
+  sortOrder   Int         @default(0)
+  locale      Locale      @default(HE)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([category])
+  @@index([isActive])
+}
+
+// ─── Support ───────────────────────────────────────────────────────────────────
+
+model SupportTicket {
+  id          String         @id @default(cuid())
+  userId      String
+  assigneeId  String?
+  subject     String
+  description String         @db.Text
+  status      TicketStatus   @default(OPEN)
+  priority    TicketPriority @default(MEDIUM)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  closedAt    DateTime?
+
+  user     User  @relation("TicketCreator", fields: [userId], references: [id], onDelete: Cascade)
+  assignee User? @relation("TicketAssignee", fields: [assigneeId], references: [id])
+  messages SupportMessage[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+model SupportMessage {
+  id        String   @id @default(cuid())
+  ticketId  String
+  senderId  String
+  content   String   @db.Text
+  isInternal Boolean @default(false)
+  createdAt DateTime @default(now())
+
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+}
+
+model SupportAccessRequest {
+  id           String              @id @default(cuid())
+  agentId      String
+  customerId   String
+  reason       String              @db.Text
+  status       SupportAccessStatus @default(PENDING)
+  permissions  Json                @default("[]")
+  approvedAt   DateTime?
+  expiresAt    DateTime?
+  revokedAt    DateTime?
+  isEmergency  Boolean             @default(false)
+  createdAt    DateTime            @default(now())
+
+  agent    User @relation("SupportAgent", fields: [agentId], references: [id])
+  customer User @relation("SupportCustomer", fields: [customerId], references: [id])
+
+  @@index([agentId])
+  @@index([customerId])
+  @@index([status])
+}
+
+// ─── Admin & Audit ─────────────────────────────────────────────────────────────
+
+model AdminAction {
+  id          String   @id @default(cuid())
+  adminId     String
+  action      String
+  targetType  String
+  targetId    String?
+  reason      String?  @db.Text
+  result      String?
+  ipAddress   String?
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now())
+
+  admin User @relation(fields: [adminId], references: [id])
+
+  @@index([adminId])
+  @@index([targetType, targetId])
+  @@index([createdAt])
+}
+
+model AuditLog {
+  id          String          @id @default(cuid())
+  auditId     String          @unique @default(cuid())
+  userId      String?
+  action      AuditActionType
+  targetType  String?
+  targetId    String?
+  ipAddress   String?
+  userAgent   String?
+  reason      String?         @db.Text
+  result      String?
+  metadata    Json            @default("{}")
+  isImmutable Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@index([targetType, targetId])
+}
+
+// ─── System ────────────────────────────────────────────────────────────────────
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  body      String           @db.Text
+  link      String?
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+}
+
+model FeatureFlag {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  name        String
+  description String?
+  isEnabled   Boolean  @default(false)
+  rules       Json     @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([key])
+}
+
+model SystemSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json
+  category  String   @default("general")
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  @@index([category])
+  @@index([key])
+}
