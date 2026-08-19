@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "db:generate": "prisma generate",
+    "db:generate": "node scripts/prisma-generate.cjs",
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
@@ -17,7 +17,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "postinstall": "prisma generate"
+    "postinstall": "node scripts/prisma-generate.cjs"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.7.4",
