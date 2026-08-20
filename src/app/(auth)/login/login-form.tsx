@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -25,7 +25,15 @@ export default function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [databaseReady, setDatabaseReady] = useState(true);
   const firebaseReady = isFirebaseClientConfigured();
+
+  useEffect(() => {
+    fetch("/api/health/auth")
+      .then((res) => res.json())
+      .then((data) => setDatabaseReady(Boolean(data.databaseConfigured)))
+      .catch(() => {});
+  }, []);
 
   async function finish(created: boolean) {
     router.push(created ? "/onboarding" : callbackUrl);
@@ -66,9 +74,9 @@ export default function LoginForm() {
         <CardDescription>{tc("appName")}</CardDescription>
       </CardHeader>
       <CardContent>
-        {!firebaseReady && (
+        {!databaseReady && (
           <div className="mb-4 rounded-md bg-destructive/10 text-destructive text-sm p-3" role="alert">
-            Firebase עדיין לא מחובר. הוסיפי את מפתחות Firebase ב-Vercel ואז עשי Redeploy.
+            Google עובד. חסר מסד נתונים בענן (Neon). בלי זה אי אפשר להיכנס.
           </div>
         )}
         <form onSubmit={handleSubmit} className="space-y-4">
