@@ -67,6 +67,7 @@ export async function middleware(request: NextRequest) {
   const isPublic =
     publicPaths.some((p) => pathname === p || pathname.startsWith(`${p}/`)) ||
     pathname.startsWith("/api/auth") ||
+    pathname.startsWith("/api/health") ||
     pathname.startsWith("/preview/") ||
     pathname.startsWith("/api/preview/") ||
     pathname.startsWith("/api/runtime/");
