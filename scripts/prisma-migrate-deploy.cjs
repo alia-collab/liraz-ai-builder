@@ -4,13 +4,44 @@ const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const url = process.env.DATABASE_URL || "";
-const isLocal =
-  !url ||
-  !url.startsWith("postgres") ||
-  url.includes("127.0.0.1") ||
-  url.includes("localhost") ||
-  url.includes("prisma:prisma@127.0.0.1");
+function normalizeDatabaseUrl(url) {
+  if (!url) return "";
+  let value = String(url).trim();
+  value = value.replace(/^DATABASE_URL\s*=\s*/i, "").trim();
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    value = value.slice(1, -1).trim();
+  }
+  return value;
+}
+
+function isHostedPostgresUrl(url) {
+  const value = normalizeDatabaseUrl(url);
+  if (!value) return false;
+  if (!value.startsWith("postgres")) return false;
+  if (value.includes("127.0.0.1") || /localhost/i.test(value)) return false;
+  return true;
+}
+
+const resolved =
+  [
+    process.env.DATABASE_URL,
+    process.env.POSTGRES_PRISMA_URL,
+    process.env.POSTGRES_URL_NON_POOLING,
+    process.env.DATABASE_URL_UNPOOLED,
+    process.env.POSTGRES_URL,
+  ]
+    .map(normalizeDatabaseUrl)
+    .find(isHostedPostgresUrl) || "";
+
+if (resolved) {
+  process.env.DATABASE_URL = resolved;
+}
+
+const url = resolved;
+const isLocal = !isHostedPostgresUrl(url);
 
 if (process.env.VERCEL !== "1") {
   console.info("[prisma] skip schema apply (not running on Vercel)");

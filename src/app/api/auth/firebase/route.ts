@@ -30,7 +30,10 @@ export async function POST(request: NextRequest) {
     }
     if (!isRealDatabaseUrl()) {
       console.error("[auth] DATABASE_URL is not a hosted Postgres URL");
-      return jsonError("Database is not configured.", 503);
+      return jsonError(
+        "אין מסד נתונים בענן. ב-Vercel עורכים את DATABASE_URL ומדביקים את מחרוזת Prisma מ-Neon שמתחילה ב-postgresql://",
+        503
+      );
     }
 
     const parsed = bodySchema.safeParse(await request.json());

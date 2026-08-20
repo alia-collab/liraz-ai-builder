@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { isAdmin, isSuperAdmin } from "@/lib/auth/config";
-import { getAuthSecret, isRealDatabaseUrl, safeErrorMessage } from "@/lib/auth/env";
+import { getAuthSecret, getDatabaseUrl, isRealDatabaseUrl, safeErrorMessage } from "@/lib/auth/env";
 import { hashPassword } from "@/lib/projects";
 import bcrypt from "bcryptjs";
 
@@ -39,8 +39,29 @@ describe("Auth env", () => {
     expect(isRealDatabaseUrl("postgresql://postgres:x@127.0.0.1:5432/liraz_ai_builder")).toBe(true);
     expect(isRealDatabaseUrl("")).toBe(false);
     expect(isRealDatabaseUrl("postgresql://user:pass@ep-xxx.neon.tech/neondb?sslmode=require")).toBe(true);
+    expect(
+      isRealDatabaseUrl('"postgresql://user:pass@ep-xxx.neon.tech/neondb?sslmode=require"')
+    ).toBe(true);
+    expect(
+      isRealDatabaseUrl("DATABASE_URL=postgresql://user:pass@ep-xxx.neon.tech/neondb?sslmode=require")
+    ).toBe(true);
     process.env.VERCEL = "1";
     expect(isRealDatabaseUrl("postgresql://postgres:x@127.0.0.1:5432/liraz_ai_builder")).toBe(false);
+    if (prevVercel === undefined) delete process.env.VERCEL;
+    else process.env.VERCEL = prevVercel;
+  });
+
+  it("uses Neon POSTGRES_PRISMA_URL when DATABASE_URL is localhost", () => {
+    const prevDb = process.env.DATABASE_URL;
+    const prevPrisma = process.env.POSTGRES_PRISMA_URL;
+    const prevVercel = process.env.VERCEL;
+    process.env.VERCEL = "1";
+    process.env.DATABASE_URL = "postgresql://postgres:x@127.0.0.1:5432/liraz_ai_builder";
+    process.env.POSTGRES_PRISMA_URL = "postgresql://user:pass@ep-xxx.neon.tech/neondb?sslmode=require";
+    expect(getDatabaseUrl()).toContain("neon.tech");
+    expect(isRealDatabaseUrl()).toBe(true);
+    process.env.DATABASE_URL = prevDb;
+    process.env.POSTGRES_PRISMA_URL = prevPrisma;
     if (prevVercel === undefined) delete process.env.VERCEL;
     else process.env.VERCEL = prevVercel;
   });
