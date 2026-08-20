@@ -35,8 +35,9 @@ async function loadPrisma() {
   return prisma;
 }
 
-export const authOptions: NextAuthOptions = {
-  secret: getAuthSecret(),
+export function getAuthOptions(): NextAuthOptions {
+  const secret = getAuthSecret();
+  const options: NextAuthOptions = {
   // JWT + credentials. Do not load PrismaAdapter at import time — a missing
   // generated client or DATABASE_URL must not 500 /api/auth/providers.
   adapter: undefined,
@@ -182,7 +183,14 @@ export const authOptions: NextAuthOptions = {
       },
     },
   },
-};
+  };
+
+  // Never pass secret: undefined — that overrides process.env.NEXTAUTH_SECRET.
+  if (secret) options.secret = secret;
+  return options;
+}
+
+export const authOptions: NextAuthOptions = getAuthOptions();
 
 export function isAdmin(role: GlobalRole): boolean {
   return role === "ADMINISTRATOR" || role === "SUPER_ADMINISTRATOR";

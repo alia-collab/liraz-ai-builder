@@ -1,15 +1,18 @@
+import type { NextRequest } from "next/server";
 import NextAuth from "next-auth";
-import { authOptions } from "@/lib/auth/config";
+import { getAuthOptions } from "@/lib/auth/config";
 import { getAuthSecret, logAuthDiagnostics } from "@/lib/auth/env";
 
-logAuthDiagnostics("nextauth-route");
+export const dynamic = "force-dynamic";
 
-if (!getAuthSecret()) {
-  console.error(
-    "[auth] NextAuth will return HTTP 500 until NEXTAUTH_SECRET or AUTH_SECRET is set in Vercel (Production, Preview, Development)."
-  );
+function handler(req: NextRequest, context: { params: Promise<Record<string, string>> }) {
+  logAuthDiagnostics("nextauth-route");
+  if (!getAuthSecret()) {
+    console.error(
+      "[auth] NextAuth will return HTTP 500 until NEXTAUTH_SECRET or AUTH_SECRET is set in Vercel (Production, Preview, Development)."
+    );
+  }
+  return NextAuth(getAuthOptions())(req, context);
 }
-
-const handler = NextAuth(authOptions);
 
 export { handler as GET, handler as POST };

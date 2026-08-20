@@ -1,10 +1,10 @@
 import { getServerSession } from "next-auth";
-import { authOptions, isAdmin, isSuperAdmin } from "./config";
+import { getAuthOptions, isAdmin, isSuperAdmin } from "./config";
 import { redirect } from "next/navigation";
 import type { GlobalRole } from "@prisma/client";
 
 export async function getSession() {
-  return getServerSession(authOptions);
+  return getServerSession(getAuthOptions());
 }
 
 export async function requireAuth() {
@@ -30,4 +30,4 @@ export function hasRole(userRole: GlobalRole, required: GlobalRole[]): boolean {
   return required.includes(userRole);
 }
 
-export { authOptions, isAdmin, isSuperAdmin };
+export { getAuthOptions, authOptions, isAdmin, isSuperAdmin };

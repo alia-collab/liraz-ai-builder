@@ -34,6 +34,7 @@ describe("Auth env", () => {
 
   it("rejects placeholder DATABASE_URL", () => {
     expect(isRealDatabaseUrl("postgresql://prisma:prisma@127.0.0.1:5432/prisma?schema=public")).toBe(false);
+    expect(isRealDatabaseUrl("postgresql://postgres:x@127.0.0.1:5432/liraz_ai_builder")).toBe(false);
     expect(isRealDatabaseUrl("")).toBe(false);
     expect(isRealDatabaseUrl("postgresql://user:pass@ep-xxx.neon.tech/neondb?sslmode=require")).toBe(true);
   });

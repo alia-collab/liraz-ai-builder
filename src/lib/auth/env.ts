@@ -19,7 +19,7 @@ export function isRealDatabaseUrl(url = process.env.DATABASE_URL): boolean {
   if (!url?.trim()) return false;
   if (url === PLACEHOLDER_DB) return false;
   if (!url.startsWith("postgres")) return false;
-  if (url.includes("127.0.0.1") && url.includes("prisma:prisma")) return false;
+  if (url.includes("127.0.0.1") || url.includes("localhost")) return false;
   return true;
 }
 

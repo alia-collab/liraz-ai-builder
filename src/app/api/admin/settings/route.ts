@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { getServerSession } from "next-auth";
-import { authOptions, isSuperAdmin } from "@/lib/auth/config";
+import { getAuthOptions, isSuperAdmin } from "@/lib/auth/config";
 import { setSetting } from "@/lib/settings";
 import { jsonError, jsonSuccess } from "@/lib/api/helpers";
 import prisma from "@/lib/db";
@@ -27,7 +27,7 @@ const planPatchSchema = z.object({
 });
 
 async function requireApiSuperAdmin() {
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession(getAuthOptions());
   if (!session?.user?.id || !isSuperAdmin(session.user.globalRole)) {
     return null;
   }
