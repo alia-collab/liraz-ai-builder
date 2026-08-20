@@ -63,6 +63,7 @@
     "noAccount": "אין לכם חשבון?",
     "hasAccount": "כבר יש לכם חשבון?",
     "orContinueWith": "או המשיכו עם",
+    "continueWithGoogle": "המשיכו עם Google",
     "verifyEmail": "אימות אימייל",
     "verifyEmailSent": "שלחנו קישור אימות לכתובת האימייל שלכם"
   },

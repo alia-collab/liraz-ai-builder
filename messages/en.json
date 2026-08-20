@@ -63,6 +63,7 @@
     "noAccount": "Don't have an account?",
     "hasAccount": "Already have an account?",
     "orContinueWith": "Or continue with",
+    "continueWithGoogle": "Continue with Google",
     "verifyEmail": "Verify Email",
     "verifyEmailSent": "We sent a verification link to your email"
   },

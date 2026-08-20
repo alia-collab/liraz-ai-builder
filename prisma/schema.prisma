@@ -237,6 +237,7 @@ model User {
   name              String?
   image             String?
   passwordHash      String?
+  firebaseUid       String?    @unique
   globalRole        GlobalRole @default(REGISTERED_USER)
   locale            Locale     @default(HE)
   mfaEnabled        Boolean    @default(false)

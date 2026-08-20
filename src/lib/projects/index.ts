@@ -61,6 +61,77 @@ export async function registerUser(input: {
   return { user, organization: org };
 }
 
+export async function upsertFirebaseUser(input: {
+  firebaseUid: string;
+  email: string;
+  name?: string | null;
+  image?: string | null;
+  emailVerified?: boolean;
+}) {
+  const email = input.email.trim().toLowerCase();
+  const superEmail = process.env.SUPER_ADMIN_EMAIL?.trim().toLowerCase();
+  const shouldBeSuper = Boolean(superEmail && email === superEmail);
+  const existing =
+    (await prisma.user.findUnique({ where: { firebaseUid: input.firebaseUid } })) ??
+    (await prisma.user.findUnique({ where: { email } }));
+
+  if (existing?.isBlocked || existing?.deletedAt) {
+    throw new Error("USER_BLOCKED");
+  }
+
+  if (existing) {
+    const user = await prisma.user.update({
+      where: { id: existing.id },
+      data: {
+        firebaseUid: input.firebaseUid,
+        name: input.name ?? existing.name,
+        image: input.image ?? existing.image,
+        emailVerified: input.emailVerified ? new Date() : existing.emailVerified,
+        lastLoginAt: new Date(),
+        ...(shouldBeSuper ? { globalRole: "SUPER_ADMINISTRATOR" as const } : {}),
+      },
+    });
+    return { user, created: false };
+  }
+
+  const user = await prisma.user.create({
+    data: {
+      email,
+      firebaseUid: input.firebaseUid,
+      name: input.name,
+      image: input.image,
+      emailVerified: input.emailVerified ? new Date() : null,
+      globalRole: shouldBeSuper ? "SUPER_ADMINISTRATOR" : "REGISTERED_USER",
+      lastLoginAt: new Date(),
+    },
+  });
+
+  const org = await prisma.organization.create({
+    data: {
+      name: input.name ? `${input.name}'s Workspace` : "My Workspace",
+      slug: slugify(email.split("@")[0]) + "-" + user.id.slice(-4),
+      ownerId: user.id,
+    },
+  });
+
+  await prisma.membership.create({
+    data: {
+      userId: user.id,
+      organizationId: org.id,
+      projectRole: "OWNER",
+      acceptedAt: new Date(),
+    },
+  });
+
+  await createAuditLog({
+    userId: user.id,
+    action: "USER_REGISTER",
+    metadata: { provider: "firebase" },
+  });
+
+  return { user, created: true };
+}
+
 export async function createProjectFromSnapshot(
   userId: string,
   organizationId: string,

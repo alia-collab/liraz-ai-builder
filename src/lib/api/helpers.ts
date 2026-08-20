@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { getServerSession } from "next-auth";
-import { getAuthOptions } from "@/lib/auth/config";
+import { getSession } from "@/lib/auth";
 
 export async function getApiSession() {
-  return getServerSession(getAuthOptions());
+  return getSession();
 }
 
 export async function requireApiAuth() {

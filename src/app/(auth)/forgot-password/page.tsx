@@ -3,25 +3,38 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
+import { sendPasswordResetEmail } from "firebase/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { firebaseErrorMessage, getFirebaseAuth, isFirebaseClientConfigured } from "@/lib/firebase/client";
 
 export default function ForgotPasswordPage() {
   const t = useTranslations("auth");
   const tc = useTranslations("common");
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const firebaseReady = isFirebaseClientConfigured();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!firebaseReady) {
+      setError("Firebase is not configured yet.");
+      return;
+    }
     setLoading(true);
-    // Email sending requires SMTP — show success for security (no email enumeration)
-    await new Promise((r) => setTimeout(r, 500));
-    setSent(true);
-    setLoading(false);
+    setError("");
+    try {
+      await sendPasswordResetEmail(getFirebaseAuth(), email.trim().toLowerCase());
+      setSent(true);
+    } catch (err) {
+      setError(firebaseErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -35,6 +48,11 @@ export default function ForgotPasswordPage() {
         </CardDescription>
       </CardHeader>
       <CardContent>
+        {error && (
+          <div className="mb-4 rounded-md bg-destructive/10 text-destructive text-sm p-3" role="alert">
+            {error}
+          </div>
+        )}
         {!sent ? (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
@@ -47,7 +65,7 @@ export default function ForgotPasswordPage() {
                 required
               />
             </div>
-            <Button type="submit" className="w-full" variant="brand" disabled={loading}>
+            <Button type="submit" className="w-full" variant="brand" disabled={loading || !firebaseReady}>
               {loading ? tc("loading") : "Send Reset Link"}
             </Button>
           </form>

@@ -2,14 +2,17 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { signInWithEmailAndPassword } from "firebase/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Sparkles } from "lucide-react";
+import { firebaseErrorMessage, getFirebaseAuth, isFirebaseClientConfigured } from "@/lib/firebase/client";
+import { completeFirebaseLogin } from "@/lib/firebase/complete-login";
+import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 
 export default function LoginForm() {
   const t = useTranslations("auth");
@@ -22,29 +25,35 @@ export default function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const firebaseReady = isFirebaseClientConfigured();
+
+  async function finish(created: boolean) {
+    router.push(created ? "/onboarding" : callbackUrl);
+    router.refresh();
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true);
-    setError("");
-
-    const result = await signIn("credentials", {
-      email: email.trim().toLowerCase(),
-      password,
-      redirect: false,
-    });
-
-    setLoading(false);
-    if (result?.error) {
-      setError(
-        result.error === "Configuration"
-          ? "Sign-in is not available. The server is missing auth configuration."
-          : "Invalid email or password"
-      );
+    if (!firebaseReady) {
+      setError("Firebase is not configured yet.");
       return;
     }
-    router.push(callbackUrl);
-    router.refresh();
+    setLoading(true);
+    setError("");
+    try {
+      const cred = await signInWithEmailAndPassword(
+        getFirebaseAuth(),
+        email.trim().toLowerCase(),
+        password
+      );
+      const idToken = await cred.user.getIdToken();
+      const data = await completeFirebaseLogin(idToken);
+      await finish(Boolean(data.created));
+    } catch (err) {
+      setError(firebaseErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -57,6 +66,11 @@ export default function LoginForm() {
         <CardDescription>{tc("appName")}</CardDescription>
       </CardHeader>
       <CardContent>
+        {!firebaseReady && (
+          <div className="mb-4 rounded-md bg-destructive/10 text-destructive text-sm p-3" role="alert">
+            Firebase עדיין לא מחובר. הוסיפי את מפתחות Firebase ב-Vercel ואז עשי Redeploy.
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
             <div className="rounded-md bg-destructive/10 text-destructive text-sm p-3" role="alert">
@@ -90,11 +104,16 @@ export default function LoginForm() {
               autoComplete="current-password"
             />
           </div>
-          <Button type="submit" className="w-full" variant="brand" disabled={loading}>
+          <Button type="submit" className="w-full" variant="brand" disabled={loading || !firebaseReady}>
             {loading ? tc("loading") : tc("login")}
           </Button>
         </form>
-
+        <div className="my-4 text-center text-xs text-muted-foreground">{t("orContinueWith")}</div>
+        <GoogleSignInButton
+          label={t("continueWithGoogle")}
+          onSuccess={(created) => void finish(created)}
+          onError={setError}
+        />
         <p className="mt-6 text-center text-sm text-muted-foreground">
           {t("noAccount")}{" "}
           <Link href="/register" className="text-brand hover:underline">

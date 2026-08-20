@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { logoutApp } from "@/lib/firebase/complete-login";
 import {
   LayoutDashboard, Users, CreditCard, FileText, Settings,
   Sparkles, Shield, Flag, LogOut, Cpu, BarChart3, X, DollarSign, LayoutTemplate,
@@ -81,7 +81,7 @@ export function AdminSidebar({ open = false, onClose }: AdminSidebarProps) {
         })}
       </nav>
       <div className="p-3 border-t">
-        <Button variant="ghost" className="w-full justify-start gap-3" onClick={() => signOut({ callbackUrl: "/" })}>
+        <Button variant="ghost" className="w-full justify-start gap-3" onClick={() => void logoutApp()}>
           <LogOut className="h-4 w-4" />
           Logout
         </Button>

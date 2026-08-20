@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { getToken } from "next-auth/jwt";
 import { applyCorsHeaders } from "@/lib/cors";
+import { sessionCookieName, verifySessionToken } from "@/lib/auth/session-cookie";
 
 const publicPaths = [
   "/",
@@ -72,16 +72,13 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/api/preview/") ||
     pathname.startsWith("/api/runtime/");
 
-  const token = await getToken({
-    req: request,
-    secret: process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET,
-  });
+  const token = await verifySessionToken(request.cookies.get(sessionCookieName())?.value);
 
   if (pathname.startsWith("/admin")) {
     if (!token) {
       return NextResponse.redirect(new URL("/login?callbackUrl=/admin", request.url));
     }
-    const role = token.globalRole as string;
+    const role = token.globalRole;
     if (role !== "ADMINISTRATOR" && role !== "SUPER_ADMINISTRATOR") {
       return NextResponse.redirect(new URL("/403", request.url));
     }

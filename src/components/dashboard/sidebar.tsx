@@ -9,7 +9,7 @@ import {
   Globe, Settings, HelpCircle, LogOut, BarChart3, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { signOut } from "next-auth/react";
+import { logoutApp } from "@/lib/firebase/complete-login";
 
 const navItems: Array<{
   href: string;
@@ -89,7 +89,7 @@ export function DashboardSidebar({ open = false, onClose }: DashboardSidebarProp
         <Button
           variant="ghost"
           className="w-full justify-start gap-3 text-muted-foreground"
-          onClick={() => signOut({ callbackUrl: "/" })}
+          onClick={() => void logoutApp()}
         >
           <LogOut className="h-4 w-4" aria-hidden="true" />
           {tc("logout")}

@@ -2,14 +2,17 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Sparkles } from "lucide-react";
+import { firebaseErrorMessage, getFirebaseAuth, isFirebaseClientConfigured } from "@/lib/firebase/client";
+import { completeFirebaseLogin } from "@/lib/firebase/complete-login";
+import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 
 export default function RegisterPage() {
   const t = useTranslations("auth");
@@ -21,38 +24,38 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const firebaseReady = isFirebaseClientConfigured();
+
+  async function finish() {
+    router.push("/onboarding");
+    router.refresh();
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!firebaseReady) {
+      setError("Firebase is not configured yet.");
+      return;
+    }
     setLoading(true);
     setError("");
-
-    const res = await fetch("/api/auth/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email, password }),
-    });
-
-    if (!res.ok) {
-      const data = await res.json();
-      setError(data.error || "Registration failed");
+    try {
+      const cred = await createUserWithEmailAndPassword(
+        getFirebaseAuth(),
+        email.trim().toLowerCase(),
+        password
+      );
+      if (name.trim()) {
+        await updateProfile(cred.user, { displayName: name.trim() });
+      }
+      const idToken = await cred.user.getIdToken(true);
+      await completeFirebaseLogin(idToken, name.trim());
+      await finish();
+    } catch (err) {
+      setError(firebaseErrorMessage(err));
+    } finally {
       setLoading(false);
-      return;
     }
-
-    const signInResult = await signIn("credentials", {
-      email: email.trim().toLowerCase(),
-      password,
-      redirect: false,
-    });
-
-    setLoading(false);
-    if (signInResult?.error) {
-      router.push("/login");
-      return;
-    }
-    router.push("/onboarding");
-    router.refresh();
   }
 
   return (
@@ -65,6 +68,11 @@ export default function RegisterPage() {
         <CardDescription>{tc("appName")}</CardDescription>
       </CardHeader>
       <CardContent>
+        {!firebaseReady && (
+          <div className="mb-4 rounded-md bg-destructive/10 text-destructive text-sm p-3" role="alert">
+            Firebase עדיין לא מחובר. הוסיפי את מפתחות Firebase ב-Vercel ואז עשי Redeploy.
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
             <div className="rounded-md bg-destructive/10 text-destructive text-sm p-3" role="alert">
@@ -98,10 +106,12 @@ export default function RegisterPage() {
               autoComplete="new-password"
             />
           </div>
-          <Button type="submit" className="w-full" variant="brand" disabled={loading}>
+          <Button type="submit" className="w-full" variant="brand" disabled={loading || !firebaseReady}>
             {loading ? tc("loading") : tc("register")}
           </Button>
         </form>
+        <div className="my-4 text-center text-xs text-muted-foreground">{t("orContinueWith")}</div>
+        <GoogleSignInButton label={t("continueWithGoogle")} onSuccess={() => void finish()} onError={setError} />
         <p className="mt-6 text-center text-sm text-muted-foreground">
           {t("hasAccount")}{" "}
           <Link href="/login" className="text-brand hover:underline">
