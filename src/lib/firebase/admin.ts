@@ -1,4 +1,5 @@
 import { createRemoteJWKSet, jwtVerify } from "jose";
+import { FIREBASE_WEB_CONFIG } from "@/lib/firebase/web-config";
 
 const FIREBASE_JWKS = createRemoteJWKSet(
   new URL("https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com")
@@ -8,7 +9,7 @@ export function getFirebaseProjectId() {
   return (
     process.env.FIREBASE_PROJECT_ID?.trim() ||
     process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID?.trim() ||
-    undefined
+    FIREBASE_WEB_CONFIG.projectId
   );
 }
 
