@@ -36,7 +36,11 @@ export default function LoginForm() {
 
     setLoading(false);
     if (result?.error) {
-      setError("Invalid email or password");
+      setError(
+        result.error === "Configuration"
+          ? "Sign-in is not available. The server is missing auth configuration."
+          : "Invalid email or password"
+      );
       return;
     }
     router.push(callbackUrl);

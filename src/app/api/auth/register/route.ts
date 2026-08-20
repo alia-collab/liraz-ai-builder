@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { registerUser } from "@/lib/projects";
 import { getClientIp, jsonError, jsonSuccess } from "@/lib/api/helpers";
+import { isRealDatabaseUrl } from "@/lib/auth/env";
 
 const registerSchema = z.object({
   email: z.string().email(),
@@ -12,6 +13,11 @@ const registerSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    if (!isRealDatabaseUrl()) {
+      console.error("[auth] register aborted: DATABASE_URL is not configured");
+      return jsonError("Registration is unavailable. Database is not configured.", 503);
+    }
+
     const body = await request.json();
     const parsed = registerSchema.safeParse(body);
     if (!parsed.success) {
@@ -20,6 +26,7 @@ export async function POST(request: NextRequest) {
 
     const { user, organization } = await registerUser({
       ...parsed.data,
+      email: parsed.data.email.trim().toLowerCase(),
       ipAddress: getClientIp(request),
     });
 
@@ -31,7 +38,7 @@ export async function POST(request: NextRequest) {
     if (err instanceof Error && err.message === "EMAIL_EXISTS") {
       return jsonError("An account with this email already exists", 409);
     }
-    console.error("Register error:", err);
+    console.error("[auth] Register error:", err instanceof Error ? err.message : "unknown");
     return jsonError("Registration failed", 500);
   }
 }

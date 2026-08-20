@@ -1,11 +1,9 @@
 import type { NextAuthOptions } from "next-auth";
-import { PrismaAdapter } from "@auth/prisma-adapter";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
-import prisma from "@/lib/db";
-import { createAuditLog } from "@/lib/audit";
 import type { GlobalRole } from "@prisma/client";
+import { getAuthSecret, isRealDatabaseUrl, safeErrorMessage } from "@/lib/auth/env";
 
 declare module "next-auth" {
   interface Session {
@@ -32,12 +30,16 @@ declare module "next-auth/jwt" {
   }
 }
 
+async function loadPrisma() {
+  const { default: prisma } = await import("@/lib/db");
+  return prisma;
+}
+
 export const authOptions: NextAuthOptions = {
-  // JWT + credentials. PrismaAdapter is only needed for OAuth account linking.
-  adapter:
-    process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
-      ? (PrismaAdapter(prisma) as NextAuthOptions["adapter"])
-      : undefined,
+  secret: getAuthSecret(),
+  // JWT + credentials. Do not load PrismaAdapter at import time — a missing
+  // generated client or DATABASE_URL must not 500 /api/auth/providers.
+  adapter: undefined,
   session: { strategy: "jwt", maxAge: 30 * 24 * 60 * 60 },
   pages: {
     signIn: "/login",
@@ -56,33 +58,52 @@ export const authOptions: NextAuthOptions = {
         ]
       : []),
     CredentialsProvider({
+      id: "credentials",
       name: "credentials",
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) return null;
-
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email.toLowerCase() },
-        });
-
-        if (!user || !user.passwordHash || user.isBlocked || user.deletedAt) {
+        const email = credentials?.email?.trim().toLowerCase();
+        const password = credentials?.password;
+        if (!email || !password) {
+          console.info("[auth] authorize rejected: missing email or password");
           return null;
         }
 
-        const valid = await bcrypt.compare(credentials.password, user.passwordHash);
-        if (!valid) return null;
+        if (!isRealDatabaseUrl()) {
+          console.error("[auth] authorize aborted: DATABASE_URL is not a usable Postgres URL");
+          return null;
+        }
 
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          image: user.image,
-          globalRole: user.globalRole,
-          mfaEnabled: user.mfaEnabled,
-        };
+        try {
+          const prisma = await loadPrisma();
+          const user = await prisma.user.findUnique({ where: { email } });
+
+          if (!user || !user.passwordHash || user.isBlocked || user.deletedAt) {
+            console.info("[auth] authorize rejected: no matching active user");
+            return null;
+          }
+
+          const valid = await bcrypt.compare(password, user.passwordHash);
+          if (!valid) {
+            console.info("[auth] authorize rejected: password mismatch");
+            return null;
+          }
+
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            image: user.image,
+            globalRole: user.globalRole,
+            mfaEnabled: user.mfaEnabled,
+          };
+        } catch (error) {
+          console.error("[auth] authorize failed:", safeErrorMessage(error));
+          return null;
+        }
       },
     }),
   ],
@@ -108,47 +129,56 @@ export const authOptions: NextAuthOptions = {
     },
     async signIn({ user, account }) {
       if (!user.id) return true;
+      if (!isRealDatabaseUrl()) return true;
       try {
+        const prisma = await loadPrisma();
         const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
         if (dbUser?.isBlocked) return false;
 
-        await prisma.user.update({
-          where: { id: user.id },
-          data: { lastLoginAt: new Date() },
-        });
+        if (dbUser) {
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { lastLoginAt: new Date() },
+          });
+        }
 
+        const { createAuditLog } = await import("@/lib/audit");
         await createAuditLog({
           userId: user.id,
           action: "USER_LOGIN",
           metadata: { provider: account?.provider ?? "credentials" },
         });
       } catch (error) {
-        console.error("signIn callback error:", error);
+        console.error("[auth] signIn callback error:", safeErrorMessage(error));
       }
       return true;
     },
   },
   events: {
     async signOut({ token }) {
-      if (token?.id) {
+      if (!token?.id || !isRealDatabaseUrl()) return;
+      try {
+        const { createAuditLog } = await import("@/lib/audit");
         await createAuditLog({
           userId: token.id as string,
           action: "USER_LOGOUT",
         });
+      } catch (error) {
+        console.error("[auth] signOut event error:", safeErrorMessage(error));
       }
     },
   },
   cookies: {
     sessionToken: {
-      name: process.env.NODE_ENV === "production" ? "__Secure-next-auth.session-token" : "next-auth.session-token",
+      name: process.env.NODE_ENV === "production" || process.env.NEXTAUTH_URL?.startsWith("https://")
+        ? "__Secure-next-auth.session-token"
+        : "next-auth.session-token",
       options: {
         httpOnly: true,
         sameSite: "lax",
         path: "/",
-        secure: process.env.NODE_ENV === "production",
-        // Host-only (no Domain). Do not set Domain=.lirazai.com — that would
-        // send session cookies to future customer preview hosts like
-        // {slug}.preview.lirazai.com.
+        secure: process.env.NODE_ENV === "production" || Boolean(process.env.NEXTAUTH_URL?.startsWith("https://")),
+        // Host-only (no Domain). Do not set Domain=.lirazai.com.
       },
     },
   },

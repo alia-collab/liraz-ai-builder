@@ -41,7 +41,7 @@ export default function RegisterPage() {
     }
 
     const signInResult = await signIn("credentials", {
-      email,
+      email: email.trim().toLowerCase(),
       password,
       redirect: false,
     });
