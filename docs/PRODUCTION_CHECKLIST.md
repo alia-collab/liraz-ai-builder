@@ -22,7 +22,7 @@ Use this checklist before accepting paying customers.
 - [ ] `PAYPAL_MODE=live`
 - [ ] `PAYPAL_WEBHOOK_ID` — production webhook endpoint
 - [ ] `PAYPAL_MONTHLY_PLAN_ID` / `PAYPAL_YEARLY_PLAN_ID` — live plans
-- [ ] `OPENAI_API_KEY` or chosen AI provider
+- [ ] `ANTHROPIC_API_KEY` (Claude)
 - [ ] `S3_*` — production bucket with restricted IAM
 - [ ] `SMTP_*` — transactional email provider
 - [ ] `DEPLOY_BASE_DOMAIN` — `preview.lirazai.com` (wildcard DNS later)
@@ -116,7 +116,7 @@ Manual acceptance tests:
 | Support email | **Required** | e.g., `support@yourdomain.com` |
 | Company legal entity | **Required** | For Terms & PayPal |
 | Tax jurisdiction | **Required** | For invoices / tax |
-| AI provider choice | Configurable | OpenAI recommended |
+| AI provider | Anthropic Claude only | Set `ANTHROPIC_API_KEY` |
 | Hosting provider | **Required** | Vercel/Railway/AWS |
 | Email provider | **Required** | SendGrid/Resend/SES |
 
@@ -129,7 +129,7 @@ Manual acceptance tests:
 | Redis (Upstash) | $10–30 |
 | S3 + CDN | $10–50 |
 | PayPal fees | See current PayPal Business rates |
-| OpenAI API | $50–500+ (usage dependent) |
+| Anthropic Claude API | $50–500+ (usage dependent) |
 | Email (SendGrid) | $15–50 |
 | Domain + SSL | $15/year |
 | Monitoring (Sentry) | $0–26 |

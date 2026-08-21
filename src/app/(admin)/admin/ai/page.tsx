@@ -15,18 +15,18 @@ export default async function AdminAIProvidersPage() {
     // DB not connected
   }
 
-  // Clear cache so admin sees live config after env changes
   resetAIProviderCache();
 
-  const providerTypes = ["OPENAI", "ANTHROPIC", "GOOGLE"] as const;
+  const providerTypes = ["ANTHROPIC"] as const;
 
   return (
     <div className="p-6 md:p-8 space-y-8">
       <div>
         <h1 className="text-2xl font-bold">AI Provider Settings</h1>
         <p className="text-zinc-400 mt-1">
-          Configure which AI provider powers project generation and editing.
-          Priority: Anthropic key → OpenAI key → DB default → <code className="text-violet-400">AI_DEFAULT_PROVIDER</code>.
+          This platform uses Anthropic Claude only. Set{" "}
+          <code className="text-violet-400">ANTHROPIC_API_KEY</code> and optionally{" "}
+          <code className="text-violet-400">ANTHROPIC_MODEL</code>.
         </p>
       </div>
 
@@ -70,10 +70,6 @@ export default async function AdminAIProvidersPage() {
               </Badge>
             ))}
           </div>
-          <p className="text-sm text-zinc-500 mt-4">
-            To switch default to Anthropic: set <code className="text-violet-400">AI_DEFAULT_PROVIDER=anthropic</code> and{" "}
-            <code className="text-violet-400">ANTHROPIC_API_KEY</code>, then re-run seed or update DB config.
-          </p>
         </CardContent>
       </Card>
     </div>

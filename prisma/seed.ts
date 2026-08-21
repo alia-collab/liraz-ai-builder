@@ -84,48 +84,31 @@ async function main() {
   }
   console.log("Feature flags seeded");
 
-  const defaultProvider = (process.env.AI_DEFAULT_PROVIDER ?? "anthropic").toLowerCase();
-
-  const aiProviders = [
-    {
-      id: "openai-default",
-      name: "OpenAI",
-      type: "OPENAI" as const,
-      isActive: Boolean(process.env.OPENAI_API_KEY),
-      isDefault: defaultProvider === "openai",
-      apiKeyEnvVar: "OPENAI_API_KEY",
-      models: [process.env.OPENAI_MODEL ?? "gpt-4o"],
-    },
-    {
-      id: "anthropic-default",
-      name: "Anthropic Claude",
-      type: "ANTHROPIC" as const,
-      isActive: Boolean(process.env.ANTHROPIC_API_KEY),
-      isDefault: defaultProvider !== "openai",
-      apiKeyEnvVar: "ANTHROPIC_API_KEY",
-      models: [process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-20250514"],
-    },
-  ];
+  const anthropicProvider = {
+    id: "anthropic-default",
+    name: "Anthropic Claude",
+    type: "ANTHROPIC" as const,
+    isActive: Boolean(process.env.ANTHROPIC_API_KEY?.trim()),
+    isDefault: true,
+    apiKeyEnvVar: "ANTHROPIC_API_KEY",
+    models: [process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-20250514"],
+  };
 
   await prisma.aIProviderConfig.deleteMany({
-    where: { apiKeyEnvVar: "NONE" },
-  }).catch(() => undefined);
+    where: { id: { not: "anthropic-default" } },
+  });
 
-  for (const provider of aiProviders) {
-    await prisma.aIProviderConfig.upsert({
-      where: { id: provider.id },
-      create: provider,
-      update: {
-        isActive: provider.isActive,
-        isDefault: provider.isDefault,
-        models: provider.models,
-      },
-    });
-  }
-
-  await prisma.aIProviderConfig.updateMany({
-    where: { id: { not: `${defaultProvider === "openai" ? "openai" : "anthropic"}-default` } },
-    data: { isDefault: false },
+  await prisma.aIProviderConfig.upsert({
+    where: { id: "anthropic-default" },
+    create: anthropicProvider,
+    update: {
+      name: anthropicProvider.name,
+      type: anthropicProvider.type,
+      isActive: anthropicProvider.isActive,
+      isDefault: true,
+      apiKeyEnvVar: anthropicProvider.apiKeyEnvVar,
+      models: anthropicProvider.models,
+    },
   });
 
   console.log("AI providers seeded");

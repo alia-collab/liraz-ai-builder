@@ -9,6 +9,10 @@ export async function POST(request: NextRequest) {
   const { error, session } = await requireApiAuth();
   if (error || !session) return error!;
 
+  if (!isClaudeConfigured()) {
+    return jsonError("ANTHROPIC_API_KEY is required for AI planning", 503);
+  }
+
   const quota = await checkQuota(session.user.id, "aiRequests");
   if (!quota.allowed) return jsonError("AI usage limit reached", 429);
 
@@ -22,11 +26,12 @@ export async function POST(request: NextRequest) {
   }
 
   let spec = planFromPrompt(prompt, body.projectType ? String(body.projectType) : undefined);
-  spec = await refineDesignWithClaude(spec);
+  const design = await refineDesignWithClaude(spec);
+  spec = design.spec;
 
   return jsonSuccess({
     spec,
-    designer: isClaudeConfigured() ? "claude" : "local",
+    designer: "claude",
     needsClarification: spec.needsClarification,
     questions: spec.questions,
     typeOptions: spec.typeOptions ?? [],

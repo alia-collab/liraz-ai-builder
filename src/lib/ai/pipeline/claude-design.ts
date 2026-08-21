@@ -9,8 +9,21 @@ interface ClaudeVisual {
   name?: string;
 }
 
-export async function refineDesignWithClaude(spec: BuildSpec): Promise<BuildSpec> {
-  if (!isClaudeConfigured()) return spec;
+export type ClaudeDesignResult = {
+  spec: BuildSpec;
+  model: string;
+  tokensUsed: number;
+  costUsd: number;
+};
+
+function estimateCost(inputTokens: number, outputTokens: number): number {
+  return inputTokens * 0.000003 + outputTokens * 0.000015;
+}
+
+export async function refineDesignWithClaude(spec: BuildSpec): Promise<ClaudeDesignResult> {
+  if (!isClaudeConfigured()) {
+    throw new Error("ANTHROPIC_API_KEY is required for AI design");
+  }
 
   const key = process.env.ANTHROPIC_API_KEY!.trim();
   const model = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514";
@@ -37,30 +50,42 @@ export async function refineDesignWithClaude(spec: BuildSpec): Promise<BuildSpec
   });
 
   if (!response.ok) {
-    console.warn("Claude design refine failed:", response.status);
-    return spec;
+    const err = await response.text();
+    throw new Error(`Anthropic API error: ${response.status} ${err}`);
   }
 
   const data = await response.json();
+  const inputTokens = Number(data.usage?.input_tokens ?? 0);
+  const outputTokens = Number(data.usage?.output_tokens ?? 0);
+  const tokensUsed = inputTokens + outputTokens;
+  const costUsd = estimateCost(inputTokens, outputTokens);
+
   const text = data.content?.find((b: { type: string }) => b.type === "text")?.text ?? "";
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
-  if (start < 0 || end <= start) return spec;
+  if (start < 0 || end <= start) {
+    return { spec, model, tokensUsed, costUsd };
+  }
 
   try {
     const visual = JSON.parse(text.slice(start, end + 1)) as ClaudeVisual;
     return {
-      ...spec,
-      name: visual.name?.trim() || spec.name,
-      visual: {
-        ...spec.visual,
-        style: visual.style || spec.visual.style,
-        primaryColor: visual.primaryColor || spec.visual.primaryColor,
-        secondaryColor: visual.secondaryColor || spec.visual.secondaryColor,
-        fontFamily: visual.fontFamily || spec.visual.fontFamily,
+      model,
+      tokensUsed,
+      costUsd,
+      spec: {
+        ...spec,
+        name: visual.name?.trim() || spec.name,
+        visual: {
+          ...spec.visual,
+          style: visual.style || spec.visual.style,
+          primaryColor: visual.primaryColor || spec.visual.primaryColor,
+          secondaryColor: visual.secondaryColor || spec.visual.secondaryColor,
+          fontFamily: visual.fontFamily || spec.visual.fontFamily,
+        },
       },
     };
   } catch {
-    return spec;
+    return { spec, model, tokensUsed, costUsd };
   }
 }

@@ -108,7 +108,8 @@ export async function startPlanJob(input: {
     }
 
     let spec = planFromPrompt(input.prompt, input.projectType);
-    spec = await refineDesignWithClaude(spec);
+    const design = await refineDesignWithClaude(spec);
+    spec = design.spec;
 
     if (analyzing) await setTaskStatus(analyzing.id, "COMPLETED", spec.typeLabel);
     const planning = await prisma.buildTask.findFirst({ where: { jobId: job.id, key: "planning" } });

@@ -20,6 +20,10 @@ export async function POST(request: NextRequest) {
   const { error, session } = await requireApiAuth();
   if (error || !session) return error!;
 
+  if (!isClaudeConfigured()) {
+    return jsonError("ANTHROPIC_API_KEY is required for AI builds", 503);
+  }
+
   const aiQuota = await checkQuota(session.user.id, "aiRequests");
   if (!aiQuota.allowed) return jsonError("AI usage limit reached", 429);
   const projectQuota = await checkQuota(session.user.id, "projects");
@@ -36,7 +40,8 @@ export async function POST(request: NextRequest) {
   };
 
   let spec: BuildSpec = body.spec ?? planFromPrompt(String(body.prompt ?? ""), body.projectType);
-  spec = await refineDesignWithClaude(spec);
+  const design = await refineDesignWithClaude(spec);
+  spec = design.spec;
   if (body.primaryColor) spec.visual.primaryColor = body.primaryColor;
 
   const orgSlug = slugify(spec.name) + "-" + Date.now().toString(36).slice(-4);
@@ -123,12 +128,10 @@ export async function POST(request: NextRequest) {
       status: qa.passed ? "COMPLETED" : "FAILED",
       response: qa.passed ? "Build complete" : qa.errors.join("; "),
       completedAt: new Date(),
-  
-      provider: isClaudeConfigured() ? "ANTHROPIC" : "OPENAI",
-  
-      model: isClaudeConfigured()
-        ? process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-20250514"
-        : process.env.OPENAI_MODEL ?? null,
+      provider: "ANTHROPIC",
+      model: design.model,
+      tokensUsed: design.tokensUsed,
+      costUsd: design.costUsd,
     },
   });
 

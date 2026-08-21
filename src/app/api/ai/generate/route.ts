@@ -20,6 +20,10 @@ export async function POST(request: NextRequest) {
   const { error, session } = await requireApiAuth();
   if (error || !session) return error!;
 
+  if (!isClaudeConfigured()) {
+    return jsonError("ANTHROPIC_API_KEY is required for AI generation", 503);
+  }
+
   const body = (await request.json().catch(() => ({}))) as {
     prompt?: unknown;
     locale?: unknown;
@@ -41,7 +45,8 @@ export async function POST(request: NextRequest) {
   if (!org) return jsonError("Organization not found", 404);
 
   let spec = planFromPrompt(prompt, projectType || undefined);
-  spec = await refineDesignWithClaude(spec);
+  const design = await refineDesignWithClaude(spec);
+  spec = design.spec;
 
   const project = await prisma.project.create({
     data: {
@@ -73,7 +78,10 @@ export async function POST(request: NextRequest) {
       status: qa.passed ? "COMPLETED" : "FAILED",
       response: qa.passed ? spec.typeLabel : qa.errors.join("; "),
       completedAt: new Date(),
-      provider: isClaudeConfigured() ? "ANTHROPIC" : "OPENAI",
+      provider: "ANTHROPIC",
+      model: design.model,
+      tokensUsed: design.tokensUsed,
+      costUsd: design.costUsd,
     },
   });
 

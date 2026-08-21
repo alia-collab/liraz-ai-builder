@@ -10,7 +10,7 @@ const featureGroups = [
     icon: Sparkles,
     items: [
       "Natural language in Hebrew & English",
-      "Powered by Claude or OpenAI",
+      "Powered by Anthropic Claude",
       "Auto-generate structure, design, content & database",
       "Chat-based editing: colors, pages, features",
       "AI content & image generation",

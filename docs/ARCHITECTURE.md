@@ -29,7 +29,7 @@ Liraz AI Builder is a multi-tenant SaaS platform that lets non-technical users c
     │           │            │            │              │
 ┌───▼───┐  ┌───▼───┐   ┌────▼────┐  ┌────▼────┐   ┌────▼─────┐
 │Postgres│  │ Redis │   │ PayPal  │  │ S3/R2   │   │ AI APIs  │
-│Prisma  │  │ BullMQ│   │ Webhooks│  │ Storage │   │ OpenAI…  │
+│Prisma  │  │ BullMQ│   │ Webhooks│  │ Storage │   │ Claude   │
 └────────┘  └───────┘   └─────────┘  └─────────┘   └──────────┘
 ```
 
@@ -48,7 +48,7 @@ Liraz AI Builder is a multi-tenant SaaS platform that lets non-technical users c
 | Payments   | PayPal Checkout + Subscriptions          | Recurring monthly/yearly, verified webhooks   |
 | Queue      | BullMQ + Redis                           | AI jobs, deployments, async tasks             |
 | Storage    | S3-compatible (AWS/R2/MinIO)             | Assets, exports, backups                      |
-| AI         | Provider abstraction layer               | Swap OpenAI/Anthropic/Google without refactor |
+| AI         | Anthropic Claude provider                | Real API only; no mock/OpenAI fallback |
 | Testing    | Vitest + Playwright                      | Unit/integration + E2E                        |
 | Monitoring | Sentry (optional) + structured logs      | Error tracking, metrics                       |
 
@@ -141,7 +141,7 @@ interface AIProvider {
 }
 ```
 
-Providers: `OpenAIProvider`, `AnthropicProvider`, `GoogleProvider`, 
+Provider: `AnthropicProvider` (Claude only).
 
 ### Safety Rules
 
@@ -275,7 +275,7 @@ liraz-ai-builder/
 | 1     | Architecture + DB schema            | ✅                                  |
 | 2     | Auth + registration + MFA hooks     | ✅                                  |
 | 3     | PayPal billing (sandbox)            | ✅ (not live until credentials set) |
-| 4     | AI project generator (OpenAI ready) | ✅                                  |
+| 4     | AI project generator (Claude) | ✅                                  |
 | 5     | Visual editor + preview             | ✅                                  |
 | 6     | Publish + subdomain                 | ✅                                  |
 | 7     | Admin panel                         | ✅                                  |

@@ -51,56 +51,25 @@ Then run `npm run db:seed`. Log in at `/login` with those credentials. You can a
 
 ## AI Provider Setup
 
-The platform supports real AI providers via a pluggable `AIProvider` interface:
-
-| Provider   | Env vars                               | Status        |
-|------------|----------------------------------------|---------------|
-| Anthropic  | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | Recommended   |
-| OpenAI     | `OPENAI_API_KEY`, `OPENAI_MODEL`       | Implemented   |
-| Google     | `GOOGLE_AI_API_KEY`, `GOOGLE_AI_MODEL` | Planned       |
-
-### Provider selection priority
-
-1. **Anthropic** — if `ANTHROPIC_API_KEY` is set
-2. **OpenAI** — if `OPENAI_API_KEY` is set
-3. **Database config** — `AIProviderConfig` where `isDefault=true` and `isActive=true`
-4. **Environment** — `AI_DEFAULT_PROVIDER` (`openai` | `anthropic` | `google`)
-
-There is no development fallback. Without a real API key, AI routes return an error.
-
-### Anthropic Claude (recommended)
+This platform uses **Anthropic Claude only**.
 
 ```env
 AI_DEFAULT_PROVIDER=anthropic
-ANTHROPIC_API_KEY=sk-ant-...
+ANTHROPIC_API_KEY=
 ANTHROPIC_MODEL=claude-sonnet-4-20250514
 ```
 
-### OpenAI
+Without `ANTHROPIC_API_KEY`, AI routes return an error. There is no mock or OpenAI fallback.
 
-```env
-AI_DEFAULT_PROVIDER=openai
-OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-4o
-```
-
-After changing provider env vars, re-seed to sync database config:
-
-```bash
-npm run db:seed
-```
-
-Claude/OpenAI are used for:
+Claude is used for:
 
 - **Project generation** — create full site structure from a natural language prompt
 - **Project editing** — modify existing projects via chat instructions (versioned before destructive edits)
-- **Content generation** — headings, descriptions, FAQ text
+- **Design refinement** — colors, fonts, and naming
 
-All AI output passes through `sanitizeProjectOutput()` — blocked patterns include `eval`, `document.cookie`, `process.env`, and unknown component types.
+All AI output passes through `sanitizeProjectOutput()`.
 
-### Switching default provider via admin UI
-
-After seeding, visit `/admin/ai` to toggle providers and reset the provider cache.
+After seeding, visit `/admin/ai` to see the Anthropic provider config.
 
 ## PayPal (Billing)
 
@@ -145,7 +114,6 @@ See [`.env.example`](.env.example) for the full list. Key variables:
 | `PLATFORM_DOMAIN` | No | `lirazai.com` |
 | `AI_DEFAULT_PROVIDER` | No | Default: `anthropic` |
 | `ANTHROPIC_API_KEY` | For Claude | Anthropic API key |
-| `OPENAI_API_KEY` | For OpenAI | OpenAI API key |
 | `PAYPAL_CLIENT_ID` | For billing | PayPal REST Client ID (sandbox, then live) |
 | `PAYPAL_CLIENT_SECRET` | For billing | PayPal REST secret (never commit) |
 | `PAYPAL_WEBHOOK_ID` | For billing | PayPal webhook ID for signature verify |

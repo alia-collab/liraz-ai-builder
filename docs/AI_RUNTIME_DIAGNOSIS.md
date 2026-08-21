@@ -5,7 +5,7 @@
 ## Can the AI write files?
 
 **No — not to a per-project filesystem.**  
-(and OpenAI/Anthropic when keyed) returns a `ProjectSnapshot`. `createProjectFromSnapshot()` writes:
+(and Anthropic Claude when `ANTHROPIC_API_KEY` is set) returns a `ProjectSnapshot`. `createProjectFromSnapshot()` writes:
 
 - `Project` row
 - `Page.components` JSON
@@ -57,7 +57,7 @@ Tenant isolation exists for **platform** data (`organizationId` filters). Genera
 | QA        | None                                       |
 
 
-`AI_DEFAULT_PROVIDER=` OpenAI key (no Anthropic) guaranteed the generic template path.
+Without `ANTHROPIC_API_KEY`, AI routes fail with a clear configuration error (no local/fake fallback).
 
 ### ContactForm (broken)
 
