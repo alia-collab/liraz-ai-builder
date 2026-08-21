@@ -5,7 +5,7 @@
 ## Can the AI write files?
 
 **No — not to a per-project filesystem.**  
-`MockAIProvider.buildMockSnapshot()` (and OpenAI/Anthropic when keyed) returns a `ProjectSnapshot`. `createProjectFromSnapshot()` writes:
+(and OpenAI/Anthropic when keyed) returns a `ProjectSnapshot`. `createProjectFromSnapshot()` writes:
 
 - `Project` row
 - `Page.components` JSON
@@ -46,16 +46,18 @@ Tenant isolation exists for **platform** data (`organizationId` filters). Genera
 
 **Yes — that is the root cause.**
 
-| Layer | What it did |
-|--------|-------------|
-| Planner | Missing — prompt went straight to template |
-| Spec | Missing |
-| Blueprint | Generic Hero / Features / ContactForm |
-| Data | `backend.tables` unused |
-| Runtime | None |
-| QA | None |
 
-`AI_DEFAULT_PROVIDER=mock` (no Anthropic/OpenAI key) guaranteed the generic template path.
+| Layer     | What it did                                |
+| --------- | ------------------------------------------ |
+| Planner   | Missing — prompt went straight to template |
+| Spec      | Missing                                    |
+| Blueprint | Generic Hero / Features / ContactForm      |
+| Data      | `backend.tables` unused                    |
+| Runtime   | None                                       |
+| QA        | None                                       |
+
+
+`AI_DEFAULT_PROVIDER=` OpenAI key (no Anthropic) guaranteed the generic template path.
 
 ### ContactForm (broken)
 
@@ -74,7 +76,7 @@ CTA `ctaLink: "#contact"` — not a page slug.
 1. **Planner** → `BuildSpec` before any pages are created.
 2. **Memory** in `Project.settings` (`spec`, changelog, protected, tasks).
 3. **Blueprint from spec** (technician + WhatsApp → services, booking, wa.me, admin leads).
-4. **`ProjectLead` + `/api/runtime/leads`**.
+4. `ProjectLead` **+** `/api/runtime/leads`.
 5. **Preview routes** `/preview/[projectId]/[pageSlug]`.
 6. **QA gate** — build not complete if dead links / inert buttons.
 7. **Surgical edits** using memory + version + rollback.

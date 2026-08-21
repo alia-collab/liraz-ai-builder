@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
       status: qa.passed ? "COMPLETED" : "FAILED",
       response: qa.passed ? spec.typeLabel : qa.errors.join("; "),
       completedAt: new Date(),
-      provider: isClaudeConfigured() ? "ANTHROPIC" : "MOCK",
+      provider: isClaudeConfigured() ? "ANTHROPIC" : "OPENAI",
     },
   });
 

@@ -18,7 +18,7 @@ export default async function AdminAIProvidersPage() {
   // Clear cache so admin sees live config after env changes
   resetAIProviderCache();
 
-  const providerTypes = ["MOCK", "OPENAI", "ANTHROPIC", "GOOGLE"] as const;
+  const providerTypes = ["OPENAI", "ANTHROPIC", "GOOGLE"] as const;
 
   return (
     <div className="p-6 md:p-8 space-y-8">
@@ -26,7 +26,7 @@ export default async function AdminAIProvidersPage() {
         <h1 className="text-2xl font-bold">AI Provider Settings</h1>
         <p className="text-zinc-400 mt-1">
           Configure which AI provider powers project generation and editing.
-          Priority: DB default → <code className="text-violet-400">AI_DEFAULT_PROVIDER</code> → mock fallback.
+          Priority: Anthropic key → OpenAI key → DB default → <code className="text-violet-400">AI_DEFAULT_PROVIDER</code>.
         </p>
       </div>
 

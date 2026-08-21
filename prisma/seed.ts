@@ -84,18 +84,9 @@ async function main() {
   }
   console.log("Feature flags seeded");
 
-  const defaultProvider = (process.env.AI_DEFAULT_PROVIDER ?? "mock").toLowerCase();
+  const defaultProvider = (process.env.AI_DEFAULT_PROVIDER ?? "anthropic").toLowerCase();
 
   const aiProviders = [
-    {
-      id: "mock-default",
-      name: "Mock AI (Development)",
-      type: "MOCK" as const,
-      isActive: true,
-      isDefault: defaultProvider === "mock",
-      apiKeyEnvVar: "NONE",
-      models: ["mock-v1"],
-    },
     {
       id: "openai-default",
       name: "OpenAI",
@@ -110,11 +101,15 @@ async function main() {
       name: "Anthropic Claude",
       type: "ANTHROPIC" as const,
       isActive: Boolean(process.env.ANTHROPIC_API_KEY),
-      isDefault: defaultProvider === "anthropic",
+      isDefault: defaultProvider !== "openai",
       apiKeyEnvVar: "ANTHROPIC_API_KEY",
       models: [process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-20250514"],
     },
   ];
+
+  await prisma.aIProviderConfig.deleteMany({
+    where: { apiKeyEnvVar: "NONE" },
+  }).catch(() => undefined);
 
   for (const provider of aiProviders) {
     await prisma.aIProviderConfig.upsert({
@@ -128,12 +123,10 @@ async function main() {
     });
   }
 
-  if (defaultProvider !== "mock") {
-    await prisma.aIProviderConfig.updateMany({
-      where: { id: { not: `${defaultProvider}-default` } },
-      data: { isDefault: false },
-    });
-  }
+  await prisma.aIProviderConfig.updateMany({
+    where: { id: { not: `${defaultProvider === "openai" ? "openai" : "anthropic"}-default` } },
+    data: { isDefault: false },
+  });
 
   console.log("AI providers seeded");
 

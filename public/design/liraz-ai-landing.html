@@ -203,7 +203,7 @@
   .hero-actions{ display:flex; gap:14px; margin-top: 36px; flex-wrap:wrap; justify-content:center; }
   .hero-note{ margin-top: 18px; font-size: 13.5px; color: var(--text-faint); }
 
-  /* prompt-to-app mock */
+  /* prompt-to-app preview */
   .hero-visual{
     margin-top: 64px;
     width: 100%;
@@ -215,7 +215,7 @@
     overflow: hidden;
     text-align: left;
   }
-  .mock-bar{
+  .demo-bar{
     display:flex;
     align-items:center;
     gap:8px;
@@ -223,10 +223,10 @@
     border-bottom: 1px solid var(--border);
     background: rgba(255,255,255,0.015);
   }
-  .mock-dot{ width:10px; height:10px; border-radius:50%; background:#35354f; }
-  .mock-title{ margin-left: 10px; font-size:12.5px; color: var(--text-faint); font-family:'JetBrains Mono', monospace; }
-  .mock-body{ display:grid; grid-template-columns: 1fr 1.35fr; min-height: 320px; }
-  .mock-chat{ padding: 22px; border-right: 1px solid var(--border); display:flex; flex-direction:column; gap:14px; }
+  .demo-dot{ width:10px; height:10px; border-radius:50%; background:#35354f; }
+  .demo-title{ margin-left: 10px; font-size:12.5px; color: var(--text-faint); font-family:'JetBrains Mono', monospace; }
+  .demo-body{ display:grid; grid-template-columns: 1fr 1.35fr; min-height: 320px; }
+  .demo-chat{ padding: 22px; border-right: 1px solid var(--border); display:flex; flex-direction:column; gap:14px; }
   .chat-msg{ font-size: 14px; padding: 12px 14px; border-radius: 12px; max-width: 92%; line-height:1.5; }
   .chat-user{ align-self:flex-end; background: rgba(124,92,255,0.16); border:1px solid rgba(124,92,255,0.3); }
   .chat-ai{ background: var(--surface-2); border: 1px solid var(--border); color: var(--text-dim); }
@@ -237,7 +237,7 @@
   .typing span:nth-child(3){ animation-delay: .4s; }
   @keyframes blink{ 0%,80%,100%{ opacity:.2; transform: scale(0.8);} 40%{ opacity:1; transform: scale(1);} }
 
-  .mock-preview{ padding: 22px; background: radial-gradient(ellipse at top, rgba(124,92,255,0.06), transparent 60%); }
+  .demo-preview{ padding: 22px; background: radial-gradient(ellipse at top, rgba(124,92,255,0.06), transparent 60%); }
   .preview-frame{ border:1px solid var(--border); border-radius: 12px; overflow:hidden; height:100%; background: var(--bg-alt); }
   .preview-nav{ display:flex; align-items:center; gap:8px; padding:10px 14px; border-bottom:1px solid var(--border); }
   .preview-pill{ height:8px; border-radius:4px; background: var(--surface-2); }
@@ -361,8 +361,8 @@
     .nav-links{ display:none; }
     .grid-3, .t-grid, .price-grid, .steps{ grid-template-columns: 1fr; }
     .stats{ grid-template-columns: repeat(2,1fr); }
-    .mock-body{ grid-template-columns: 1fr; }
-    .mock-chat{ border-right:none; border-bottom:1px solid var(--border); }
+    .demo-body{ grid-template-columns: 1fr; }
+    .demo-chat{ border-right:none; border-bottom:1px solid var(--border); }
     .prompt-grid{ grid-template-columns: 1fr; }
     .foot-grid{ grid-template-columns: 1fr 1fr; }
     section{ padding: 64px 0; }
@@ -410,12 +410,12 @@
         <div class="hero-note">No credit card required · Free plan available · Publish in minutes</div>
 
         <div class="hero-visual">
-          <div class="mock-bar">
-            <div class="mock-dot"></div><div class="mock-dot"></div><div class="mock-dot"></div>
-            <div class="mock-title">liraz.ai/build</div>
+          <div class="demo-bar">
+            <div class="demo-dot"></div><div class="demo-dot"></div><div class="demo-dot"></div>
+            <div class="demo-title">liraz.ai/build</div>
           </div>
-          <div class="mock-body">
-            <div class="mock-chat">
+          <div class="demo-body">
+            <div class="demo-chat">
               <div class="chat-msg chat-user">Build me a booking site for my yoga studio, with class schedules and online payments.</div>
               <div class="chat-msg chat-ai"><b>Liraz AI</b> — Got it. I've created a homepage, a class schedule, and a booking flow with payments. Want a dark or light look?</div>
               <div class="chat-msg chat-user">Dark, and add a section for instructor bios.</div>
@@ -423,7 +423,7 @@
                 <div class="typing"><span></span><span></span><span></span></div>
               </div>
             </div>
-            <div class="mock-preview">
+            <div class="demo-preview">
               <div class="preview-frame">
                 <div class="preview-nav">
                   <div class="preview-pill" style="width:60px;"></div>

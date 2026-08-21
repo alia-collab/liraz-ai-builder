@@ -51,27 +51,29 @@ Then run `npm run db:seed`. Log in at `/login` with those credentials. You can a
 
 ## AI Provider Setup
 
-The platform supports multiple AI providers via a pluggable `AIProvider` interface:
+The platform supports real AI providers via a pluggable `AIProvider` interface:
 
 | Provider   | Env vars                               | Status        |
 |------------|----------------------------------------|---------------|
-| Mock       | _(none)_                               | Built-in dev  |
+| Anthropic  | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | Recommended   |
 | OpenAI     | `OPENAI_API_KEY`, `OPENAI_MODEL`       | Implemented   |
-| Anthropic  | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | Implemented   |
 | Google     | `GOOGLE_AI_API_KEY`, `GOOGLE_AI_MODEL` | Planned       |
 
 ### Provider selection priority
 
-1. **Database config** — `AIProviderConfig` where `isDefault=true` and `isActive=true`
-2. **Environment** — `AI_DEFAULT_PROVIDER` (`mock` | `openai` | `anthropic` | `google`)
-3. **Fallback** — Mock provider if the selected provider has no API key
+1. **Anthropic** — if `ANTHROPIC_API_KEY` is set
+2. **OpenAI** — if `OPENAI_API_KEY` is set
+3. **Database config** — `AIProviderConfig` where `isDefault=true` and `isActive=true`
+4. **Environment** — `AI_DEFAULT_PROVIDER` (`openai` | `anthropic` | `google`)
 
-### Mock provider (no API key)
+There is no development fallback. Without a real API key, AI routes return an error.
 
-Default for local development. Returns deterministic sample project structures without external API calls.
+### Anthropic Claude (recommended)
 
 ```env
-AI_DEFAULT_PROVIDER=mock
+AI_DEFAULT_PROVIDER=anthropic
+ANTHROPIC_API_KEY=sk-ant-...
+ANTHROPIC_MODEL=claude-sonnet-4-20250514
 ```
 
 ### OpenAI
@@ -80,14 +82,6 @@ AI_DEFAULT_PROVIDER=mock
 AI_DEFAULT_PROVIDER=openai
 OPENAI_API_KEY=sk-...
 OPENAI_MODEL=gpt-4o
-```
-
-### Anthropic Claude (recommended)
-
-```env
-AI_DEFAULT_PROVIDER=anthropic
-ANTHROPIC_API_KEY=sk-ant-...
-ANTHROPIC_MODEL=claude-sonnet-4-20250514
 ```
 
 After changing provider env vars, re-seed to sync database config:
@@ -149,7 +143,7 @@ See [`.env.example`](.env.example) for the full list. Key variables:
 | `NEXTAUTH_URL` | Yes | Local: `http://localhost:3000`. Vercel Production: `https://lirazai.com` |
 | `NEXT_PUBLIC_APP_URL` | Yes | Same as `NEXTAUTH_URL` |
 | `PLATFORM_DOMAIN` | No | `lirazai.com` |
-| `AI_DEFAULT_PROVIDER` | No | Default: `mock` |
+| `AI_DEFAULT_PROVIDER` | No | Default: `anthropic` |
 | `ANTHROPIC_API_KEY` | For Claude | Anthropic API key |
 | `OPENAI_API_KEY` | For OpenAI | OpenAI API key |
 | `PAYPAL_CLIENT_ID` | For billing | PayPal REST Client ID (sandbox, then live) |

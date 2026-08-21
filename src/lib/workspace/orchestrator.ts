@@ -418,7 +418,7 @@ async function runEditJob(
     let next = surgical.snapshot;
 
     const provider = await getAIProvider();
-    if (provider.type !== "MOCK" && !input.componentId && !/צבע|color|כחול|ירוק|אדום|וואטסאפ|whatsapp/.test(input.prompt.toLowerCase())) {
+    if (!input.componentId && !/צבע|color|כחול|ירוק|אדום|וואטסאפ|whatsapp/.test(input.prompt.toLowerCase())) {
       try {
         const ai = await provider.editProject(current, instruction, {
           userId: input.userId,

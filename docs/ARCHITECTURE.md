@@ -33,21 +33,27 @@ Liraz AI Builder is a multi-tenant SaaS platform that lets non-technical users c
 └────────┘  └───────┘   └─────────┘  └─────────┘   └──────────┘
 ```
 
+
+
 ## 2. Technology Stack
 
-| Layer | Choice | Rationale |
-|-------|--------|-----------|
-| Frontend | Next.js 15 + TypeScript | SSR, API routes, App Router, production-ready |
-| UI | Tailwind CSS + Radix UI (shadcn pattern) | Accessible, RTL/LTR, dark mode |
-| i18n | next-intl | Hebrew RTL + English LTR |
-| Database | PostgreSQL + Prisma | Relational integrity, migrations, type safety |
-| Auth | NextAuth.js v4 | OAuth (Google/Apple), credentials, MFA hooks |
-| Payments | PayPal Checkout + Subscriptions | Recurring monthly/yearly, verified webhooks |
-| Queue | BullMQ + Redis | AI jobs, deployments, async tasks |
-| Storage | S3-compatible (AWS/R2/MinIO) | Assets, exports, backups |
-| AI | Provider abstraction layer | Swap OpenAI/Anthropic/Google without refactor |
-| Testing | Vitest + Playwright | Unit/integration + E2E |
-| Monitoring | Sentry (optional) + structured logs | Error tracking, metrics |
+
+| Layer      | Choice                                   | Rationale                                     |
+| ---------- | ---------------------------------------- | --------------------------------------------- |
+| Frontend   | Next.js 15 + TypeScript                  | SSR, API routes, App Router, production-ready |
+| UI         | Tailwind CSS + Radix UI (shadcn pattern) | Accessible, RTL/LTR, dark mode                |
+| i18n       | next-intl                                | Hebrew RTL + English LTR                      |
+| Database   | PostgreSQL + Prisma                      | Relational integrity, migrations, type safety |
+| Auth       | NextAuth.js v4                           | OAuth (Google/Apple), credentials, MFA hooks  |
+| Payments   | PayPal Checkout + Subscriptions          | Recurring monthly/yearly, verified webhooks   |
+| Queue      | BullMQ + Redis                           | AI jobs, deployments, async tasks             |
+| Storage    | S3-compatible (AWS/R2/MinIO)             | Assets, exports, backups                      |
+| AI         | Provider abstraction layer               | Swap OpenAI/Anthropic/Google without refactor |
+| Testing    | Vitest + Playwright                      | Unit/integration + E2E                        |
+| Monitoring | Sentry (optional) + structured logs      | Error tracking, metrics                       |
+
+
+
 
 ## 3. Multi-Tenancy & Isolation
 
@@ -62,28 +68,40 @@ User → Organization → Project → Pages/Assets/Deployments
 - **API middleware:** Validates membership role before any mutation.
 - **AI context:** Never includes data from other tenants.
 
+
+
 ## 4. User Roles & Permissions
+
+
 
 ### Global Roles (platform-wide)
 
-| Role | Capabilities |
-|------|-------------|
-| Visitor | Marketing pages only |
-| Registered User | Create projects (within free/trial limits) |
-| Paying Customer | Full subscription features |
-| Team Member | Invited to org projects |
-| Support Agent | Support panel, time-limited customer access |
-| Administrator | Admin panel (RBAC scoped) |
-| Super Administrator | Full system control + MFA required |
+
+| Role                | Capabilities                                |
+| ------------------- | ------------------------------------------- |
+| Visitor             | Marketing pages only                        |
+| Registered User     | Create projects (within free/trial limits)  |
+| Paying Customer     | Full subscription features                  |
+| Team Member         | Invited to org projects                     |
+| Support Agent       | Support panel, time-limited customer access |
+| Administrator       | Admin panel (RBAC scoped)                   |
+| Super Administrator | Full system control + MFA required          |
+
+
+
 
 ### Project Roles (per organization)
 
-| Role | Create | Edit | Publish | Delete | Invite | Billing |
-|------|--------|------|---------|--------|--------|---------|
-| Owner | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Admin | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ |
-| Editor | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Viewer | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+
+| Role   | Create | Edit | Publish | Delete | Invite | Billing |
+| ------ | ------ | ---- | ------- | ------ | ------ | ------- |
+| Owner  | ✅      | ✅    | ✅       | ✅      | ✅      | ✅       |
+| Admin  | ✅      | ✅    | ✅       | ❌      | ✅      | ❌       |
+| Editor | ❌      | ✅    | ❌       | ❌      | ❌      | ❌       |
+| Viewer | ❌      | ❌    | ❌       | ❌      | ❌      | ❌       |
+
+
+
 
 ## 5. AI Engine Architecture
 
@@ -109,6 +127,8 @@ User Prompt (he/en)
                                               └───────────┘
 ```
 
+
+
 ### AI Provider Abstraction
 
 ```typescript
@@ -121,7 +141,7 @@ interface AIProvider {
 }
 ```
 
-Providers: `OpenAIProvider`, `AnthropicProvider`, `GoogleProvider`, `MockProvider` (dev/test).
+Providers: `OpenAIProvider`, `AnthropicProvider`, `GoogleProvider`, 
 
 ### Safety Rules
 
@@ -130,6 +150,8 @@ Providers: `OpenAIProvider`, `AnthropicProvider`, `GoogleProvider`, `MockProvide
 - Code sanitization (no eval, no external script injection).
 - Rate limiting + quota enforcement per plan.
 - Audit every AI request.
+
+
 
 ## 6. Visual Editor
 
@@ -147,12 +169,15 @@ Component tree stored as JSON in `Page.components`:
 ```
 
 Features:
+
 - Drag & drop (react-dnd pattern)
 - Undo/redo stack (in-memory + version snapshots)
 - Responsive breakpoints (desktop/tablet/mobile)
 - RTL/LTR per page
 - Auto-save (debounced API calls)
 - SEO panel per page
+
+
 
 ## 7. Billing Flow
 
@@ -189,13 +214,18 @@ Environments: `DEVELOPMENT`, `PREVIEW`, `PRODUCTION`.
 - Audit logs are append-only (`isImmutable: true`)
 - Support access: time-limited, customer-approved, minimal permissions
 
+
+
 ## 10. Admin Panel
 
 Separate route group `(admin)` with:
+
 - Mandatory MFA for admin roles
 - RBAC middleware
 - No backdoors — Super Admin created via secure CLI seed only
 - Full audit trail on every action
+
+
 
 ## 11. Directory Structure
 
@@ -235,18 +265,24 @@ liraz-ai-builder/
 └── README.md
 ```
 
+
+
 ## 12. Phased Delivery (this build)
 
-| Phase | Deliverable | Status |
-|-------|-------------|--------|
-| 1 | Architecture + DB schema | ✅ |
-| 2 | Auth + registration + MFA hooks | ✅ |
-| 3 | PayPal billing (sandbox) | ✅ (not live until credentials set) |
-| 4 | AI project generator (mock + OpenAI ready) | ✅ |
-| 5 | Visual editor + preview | ✅ |
-| 6 | Publish + subdomain | ✅ |
-| 7 | Admin panel | ✅ |
-| 8 | Legal docs + tests + README | ✅ |
+
+| Phase | Deliverable                         | Status                             |
+| ----- | ----------------------------------- | ---------------------------------- |
+| 1     | Architecture + DB schema            | ✅                                  |
+| 2     | Auth + registration + MFA hooks     | ✅                                  |
+| 3     | PayPal billing (sandbox)            | ✅ (not live until credentials set) |
+| 4     | AI project generator (OpenAI ready) | ✅                                  |
+| 5     | Visual editor + preview             | ✅                                  |
+| 6     | Publish + subdomain                 | ✅                                  |
+| 7     | Admin panel                         | ✅                                  |
+| 8     | Legal docs + tests + README         | ✅                                  |
+
+
+
 
 ## 13. What Requires External Setup
 

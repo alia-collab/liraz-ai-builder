@@ -85,15 +85,32 @@ export async function POST(request: NextRequest) {
   let nextSnapshot = surgical.snapshot;
 
   const provider = await getAIProvider();
-  if (provider.type !== "MOCK" && !/צבע|color|כחול|ירוק|אדום|וואטסאפ|whatsapp/.test(instruction.toLowerCase())) {
-    try {
+  if (!/צבע|color|כחול|ירוק|אדום|וואטסאפ|whatsapp/.test(instruction.toLowerCase())) {
+    try { 
+      
       const ai = await provider.editProject(currentSnapshot, instruction, {
         userId: session.user.id,
         projectId: project.id,
         locale: project.locale,
         currentSnapshot,
       });
+      
       nextSnapshot = ai.snapshot;
+      
+      await prisma.aIRequest.create({
+        data: {
+          userId: session.user.id,
+          projectId: project.id,
+          prompt: instruction,
+          provider: "ANTHROPIC",
+          model: process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-20250514",
+          status: "COMPLETED",
+          response: ai.explanation ?? "Project edited",
+          tokensUsed: ai.tokensUsed ?? 0,
+          costUsd: ai.costUsd ?? 0,
+          completedAt: new Date(),
+        },
+      });
     } catch {
       nextSnapshot = surgical.snapshot;
     }

@@ -123,7 +123,12 @@ export async function POST(request: NextRequest) {
       status: qa.passed ? "COMPLETED" : "FAILED",
       response: qa.passed ? "Build complete" : qa.errors.join("; "),
       completedAt: new Date(),
-      provider: isClaudeConfigured() ? "ANTHROPIC" : "MOCK",
+  
+      provider: isClaudeConfigured() ? "ANTHROPIC" : "OPENAI",
+  
+      model: isClaudeConfigured()
+        ? process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-20250514"
+        : process.env.OPENAI_MODEL ?? null,
     },
   });
 

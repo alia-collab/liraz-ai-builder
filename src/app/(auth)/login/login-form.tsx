@@ -26,12 +26,16 @@ export default function LoginForm() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [databaseReady, setDatabaseReady] = useState(true);
+  const [databaseHost, setDatabaseHost] = useState("");
   const firebaseReady = isFirebaseClientConfigured();
 
   useEffect(() => {
     fetch("/api/health/auth")
       .then((res) => res.json())
-      .then((data) => setDatabaseReady(Boolean(data.databaseConfigured)))
+      .then((data) => {
+        setDatabaseReady(Boolean(data.databaseConfigured));
+        setDatabaseHost(typeof data.databaseHost === "string" ? data.databaseHost : "");
+      })
       .catch(() => {});
   }, []);
 
@@ -76,8 +80,8 @@ export default function LoginForm() {
       <CardContent>
         {!databaseReady && (
           <div className="mb-4 rounded-md bg-destructive/10 text-destructive text-sm p-3" role="alert">
-            Google works. The live site still has localhost DATABASE_URL, not Neon.
-            Click Save on the Neon URL, then Redeploy without cache.
+            Google works. Live database host is {databaseHost || "unknown"} — still this computer, not Neon.
+            In Vercel add a new variable POSTGRES_PRISMA_URL with the Neon URL, Save, then Redeploy.
           </div>
         )}
         <form onSubmit={handleSubmit} className="space-y-4">
