@@ -76,7 +76,8 @@ export default function LoginForm() {
       <CardContent>
         {!databaseReady && (
           <div className="mb-4 rounded-md bg-destructive/10 text-destructive text-sm p-3" role="alert">
-            Google עובד. חסר מסד נתונים בענן (Neon). בלי זה אי אפשר להיכנס.
+            Google works. The live site still has localhost DATABASE_URL, not Neon.
+            Click Save on the Neon URL, then Redeploy without cache.
           </div>
         )}
         <form onSubmit={handleSubmit} className="space-y-4">

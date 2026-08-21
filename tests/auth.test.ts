@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { isAdmin, isSuperAdmin } from "@/lib/auth/config";
-import { getAuthSecret, getDatabaseUrl, isRealDatabaseUrl, safeErrorMessage } from "@/lib/auth/env";
+import { getAuthSecret, getDatabaseUrl, isRealDatabaseUrl, safeErrorMessage, toDirectDatabaseUrl, withPrismaFriendlyDatabaseUrl } from "@/lib/auth/env";
 import { hashPassword } from "@/lib/projects";
 import bcrypt from "bcryptjs";
 
@@ -68,6 +68,16 @@ describe("Auth env", () => {
 
   it("safeErrorMessage never stringifies objects blindly as secrets", () => {
     expect(safeErrorMessage(new Error("db down"))).toBe("db down");
+  });
+
+  it("makes Neon pooler URLs Prisma-friendly", () => {
+    const pooled =
+      "postgresql://u:p@ep-x-pooler.c-5.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require";
+    const friendly = withPrismaFriendlyDatabaseUrl(pooled);
+    expect(friendly).toContain("pgbouncer=true");
+    expect(friendly).not.toContain("channel_binding");
+    const direct = toDirectDatabaseUrl(pooled);
+    expect(direct).not.toContain("-pooler");
   });
 });
 

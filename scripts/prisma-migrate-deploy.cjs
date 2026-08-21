@@ -17,6 +17,21 @@ function normalizeDatabaseUrl(url) {
   return value;
 }
 
+function toDirectDatabaseUrl(url) {
+  let value = normalizeDatabaseUrl(url);
+  if (!value) return value;
+  value = value.replace(/([?&])channel_binding=[^&]*/g, "$1").replace(/[?&]$/, "");
+  try {
+    const parsed = new URL(value);
+    parsed.hostname = parsed.hostname.replace("-pooler", "");
+    parsed.searchParams.delete("pgbouncer");
+    parsed.searchParams.delete("channel_binding");
+    return parsed.toString();
+  } catch {
+    return value.replace("-pooler", "");
+  }
+}
+
 function isHostedPostgresUrl(url) {
   const value = normalizeDatabaseUrl(url);
   if (!value) return false;
@@ -38,6 +53,7 @@ const resolved =
 
 if (resolved) {
   process.env.DATABASE_URL = resolved;
+  process.env.DIRECT_URL = toDirectDatabaseUrl(resolved);
 }
 
 const url = resolved;

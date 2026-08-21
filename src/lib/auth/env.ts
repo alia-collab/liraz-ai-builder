@@ -28,6 +28,34 @@ export function normalizeDatabaseUrl(url: string | undefined): string {
   return value;
 }
 
+export function withPrismaFriendlyDatabaseUrl(url: string): string {
+  const value = normalizeDatabaseUrl(url);
+  if (!value.startsWith("postgres")) return value;
+  try {
+    const parsed = new URL(value);
+    parsed.searchParams.delete("channel_binding");
+    if (parsed.hostname.includes("-pooler") && !parsed.searchParams.has("pgbouncer")) {
+      parsed.searchParams.set("pgbouncer", "true");
+    }
+    return parsed.toString();
+  } catch {
+    return value.replace(/([?&])channel_binding=[^&]*/g, "$1").replace(/[?&]$/, "");
+  }
+}
+
+export function toDirectDatabaseUrl(url: string): string {
+  const value = withPrismaFriendlyDatabaseUrl(url);
+  try {
+    const parsed = new URL(value);
+    parsed.hostname = parsed.hostname.replace("-pooler", "");
+    parsed.searchParams.delete("pgbouncer");
+    parsed.searchParams.delete("channel_binding");
+    return parsed.toString();
+  } catch {
+    return value.replace("-pooler", "");
+  }
+}
+
 export function isHostedPostgresUrl(url: string | undefined): boolean {
   const value = normalizeDatabaseUrl(url);
   if (!value) return false;
@@ -47,7 +75,8 @@ export function getDatabaseUrl(): string | undefined {
   ]
     .map(normalizeDatabaseUrl)
     .filter(Boolean);
-  return candidates.find((url) => isHostedPostgresUrl(url));
+  const hosted = candidates.find((url) => isHostedPostgresUrl(url));
+  return hosted ? withPrismaFriendlyDatabaseUrl(hosted) : undefined;
 }
 
 export function describeDatabase(): {
@@ -56,6 +85,7 @@ export function describeDatabase(): {
   hasAltPostgresUrl: boolean;
   looksLocal: boolean;
   kind: "neon" | "localhost" | "missing" | "other";
+  host: string | null;
 } {
   const raw = normalizeDatabaseUrl(process.env.DATABASE_URL);
   const configured = Boolean(getDatabaseUrl());
@@ -74,6 +104,7 @@ export function describeDatabase(): {
     ),
     looksLocal,
     kind,
+    host: hostOf(raw),
   };
 }
 

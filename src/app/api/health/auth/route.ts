@@ -25,6 +25,7 @@ export async function GET() {
       databaseConfigured: database,
       databaseKind: db.kind,
       databaseLooksLocal: db.looksLocal,
+      databaseHost: db.host,
       hasDatabaseUrl: db.hasDatabaseUrl,
       hasAltPostgresUrl: db.hasAltPostgresUrl,
       firebaseAdminConfigured: firebaseAdmin,
