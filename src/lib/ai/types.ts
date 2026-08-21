@@ -61,6 +61,7 @@ export interface AIResponse {
   previewRequired?: boolean;
   tokensUsed: number;
   costUsd: number;
+  model?: string;
 }
 
 export interface ValidationResult {

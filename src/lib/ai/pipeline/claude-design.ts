@@ -1,5 +1,6 @@
 import type { BuildSpec } from "./types";
 import { isClaudeConfigured } from "@/lib/ai/anthropic-provider";
+import { logAiUsageDebug, parseAnthropicUsage } from "@/lib/ai/usage";
 
 interface ClaudeVisual {
   primaryColor?: string;
@@ -14,11 +15,9 @@ export type ClaudeDesignResult = {
   model: string;
   tokensUsed: number;
   costUsd: number;
+  inputTokens: number;
+  outputTokens: number;
 };
-
-function estimateCost(inputTokens: number, outputTokens: number): number {
-  return inputTokens * 0.000003 + outputTokens * 0.000015;
-}
 
 export async function refineDesignWithClaude(spec: BuildSpec): Promise<ClaudeDesignResult> {
   if (!isClaudeConfigured()) {
@@ -55,24 +54,35 @@ export async function refineDesignWithClaude(spec: BuildSpec): Promise<ClaudeDes
   }
 
   const data = await response.json();
-  const inputTokens = Number(data.usage?.input_tokens ?? 0);
-  const outputTokens = Number(data.usage?.output_tokens ?? 0);
-  const tokensUsed = inputTokens + outputTokens;
-  const costUsd = estimateCost(inputTokens, outputTokens);
+  const usage = parseAnthropicUsage(data);
+  logAiUsageDebug({
+    model,
+    inputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens,
+    tokensUsed: usage.tokensUsed,
+    costUsd: usage.costUsd,
+    path: "claude-design.refineDesignWithClaude",
+  });
 
   const text = data.content?.find((b: { type: string }) => b.type === "text")?.text ?? "";
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
+  const base = {
+    model,
+    tokensUsed: usage.tokensUsed,
+    costUsd: usage.costUsd,
+    inputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens,
+  };
+
   if (start < 0 || end <= start) {
-    return { spec, model, tokensUsed, costUsd };
+    return { ...base, spec };
   }
 
   try {
     const visual = JSON.parse(text.slice(start, end + 1)) as ClaudeVisual;
     return {
-      model,
-      tokensUsed,
-      costUsd,
+      ...base,
       spec: {
         ...spec,
         name: visual.name?.trim() || spec.name,
@@ -86,6 +96,6 @@ export async function refineDesignWithClaude(spec: BuildSpec): Promise<ClaudeDes
       },
     };
   } catch {
-    return { spec, model, tokensUsed, costUsd };
+    return { ...base, spec };
   }
 }

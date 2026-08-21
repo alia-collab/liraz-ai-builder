@@ -3,6 +3,7 @@ import { z } from "zod";
 import prisma from "@/lib/db";
 import { getAIProvider } from "@/lib/ai";
 import type { ProjectSnapshot } from "@/lib/ai/types";
+import { createAnthropicAIRequest, anthropicModelName } from "@/lib/ai/log-request";
 import { createProjectVersion } from "@/lib/projects";
 import { checkQuota, incrementUsage } from "@/lib/quotas";
 import { requireApiAuth, jsonError, jsonSuccess } from "@/lib/api/helpers";
@@ -83,36 +84,43 @@ export async function POST(request: NextRequest) {
 
   const surgical = applySurgicalEdit(currentSnapshot, instruction, parsed.data.componentId);
   let nextSnapshot = surgical.snapshot;
+  let explanation = surgical.summary;
+  const skipClaude = /צבע|color|כחול|ירוק|אדום|וואטסאפ|whatsapp/.test(instruction.toLowerCase());
 
-  const provider = await getAIProvider();
-  if (!/צבע|color|כחול|ירוק|אדום|וואטסאפ|whatsapp/.test(instruction.toLowerCase())) {
-    try { 
-      
+  if (!skipClaude) {
+    try {
+      const provider = await getAIProvider();
       const ai = await provider.editProject(currentSnapshot, instruction, {
         userId: session.user.id,
         projectId: project.id,
         locale: project.locale,
         currentSnapshot,
       });
-      
       nextSnapshot = ai.snapshot;
-      
-      await prisma.aIRequest.create({
-        data: {
-          userId: session.user.id,
-          projectId: project.id,
-          prompt: instruction,
-          provider: "ANTHROPIC",
-          model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514",
-          status: "COMPLETED",
-          response: ai.explanation ?? "Project edited",
-          tokensUsed: ai.tokensUsed,
-          costUsd: ai.costUsd,
-          completedAt: new Date(),
-        },
+      explanation = ai.explanation || surgical.summary;
+
+      await createAnthropicAIRequest({
+        userId: session.user.id,
+        projectId: project.id,
+        prompt: instruction,
+        status: "COMPLETED",
+        response: explanation,
+        model: ai.model || anthropicModelName(),
+        tokensUsed: ai.tokensUsed,
+        costUsd: ai.costUsd,
       });
-    } catch {
-      nextSnapshot = surgical.snapshot;
+    } catch (err) {
+      await createAnthropicAIRequest({
+        userId: session.user.id,
+        projectId: project.id,
+        prompt: instruction,
+        status: "FAILED",
+        response: null,
+        errorMessage: err instanceof Error ? err.message : "Anthropic edit failed",
+        tokensUsed: 0,
+        costUsd: 0,
+      });
+      return jsonError(err instanceof Error ? err.message : "AI edit failed", 502);
     }
   }
 
@@ -141,7 +149,7 @@ export async function POST(request: NextRequest) {
   if (memory) {
     memory.changelog.push({
       at: new Date().toISOString(),
-      summary: surgical.summary,
+      summary: explanation,
       files: surgical.files,
       by: session.user.id,
     });
@@ -156,7 +164,7 @@ export async function POST(request: NextRequest) {
   await incrementUsage(session.user.id, "aiRequests");
 
   return jsonSuccess({
-    explanation: surgical.summary,
+    explanation,
     qa,
     previewRequired: false,
   });

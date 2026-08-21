@@ -5,9 +5,11 @@ import { buildSnapshotFromSpec } from "@/lib/ai/pipeline/blueprint";
 import { qaSnapshot, applySurgicalEdit } from "@/lib/ai/pipeline/qa";
 import { emptyMemory } from "@/lib/ai/pipeline/memory";
 import { getAIProvider } from "@/lib/ai";
+import { createAnthropicAIRequest, anthropicModelName } from "@/lib/ai/log-request";
 import { createProjectVersion } from "@/lib/projects";
 import { incrementUsage } from "@/lib/quotas";
 import type { BuildSpec } from "@/lib/ai/pipeline/types";
+import type { ProjectSnapshot } from "@/lib/ai/types";
 import { addChatMessage, setTaskStatus, updateJob, PLAN_TASKS, BUILD_TASKS, EDIT_TASKS } from "./tasks";
 import { writeSnapshotToProject, currentSnapshotFromProject } from "./persist";
 import { emitWorkspace } from "./events";
@@ -111,6 +113,17 @@ export async function startPlanJob(input: {
     const design = await refineDesignWithClaude(spec);
     spec = design.spec;
 
+    await createAnthropicAIRequest({
+      userId: input.userId,
+      projectId: input.projectId,
+      prompt: input.prompt,
+      status: "COMPLETED",
+      response: `Plan design: ${spec.typeLabel}`,
+      model: design.model,
+      tokensUsed: design.tokensUsed,
+      costUsd: design.costUsd,
+    });
+
     if (analyzing) await setTaskStatus(analyzing.id, "COMPLETED", spec.typeLabel);
     const planning = await prisma.buildTask.findFirst({ where: { jobId: job.id, key: "planning" } });
     if (planning) await setTaskStatus(planning.id, "RUNNING");
@@ -135,6 +148,16 @@ export async function startPlanJob(input: {
     return job.id;
   } catch (err) {
     if (analyzing) await setTaskStatus(analyzing.id, "FAILED", err instanceof Error ? err.message : "plan failed");
+    await createAnthropicAIRequest({
+      userId: input.userId,
+      projectId: input.projectId,
+      prompt: input.prompt,
+      status: "FAILED",
+      errorMessage: err instanceof Error ? err.message : "plan failed",
+      model: anthropicModelName(),
+      tokensUsed: 0,
+      costUsd: 0,
+    });
     await failJob(job.id, input.projectId, he ? "הניתוח נכשל. אפשר לנסות לתקן." : "Analysis failed. You can try to fix it.");
     throw err;
   }
@@ -221,7 +244,58 @@ async function runBuildJob(input: { projectId: string; userId: string; jobId: st
     }
 
     await mark("structure", "RUNNING");
-    const snapshot = buildSnapshotFromSpec(input.spec, input.projectId);
+    let tokensUsed = 0;
+    let costUsd = 0;
+    let model = anthropicModelName();
+    let snapshot: ProjectSnapshot = buildSnapshotFromSpec(input.spec, input.projectId);
+
+    try {
+      const provider = await getAIProvider();
+      const ai = await provider.generateProject(
+        input.spec.inferredFrom || `${input.spec.name}: ${input.spec.purpose}`,
+        {
+          userId: input.userId,
+          projectId: input.projectId,
+          locale: input.spec.locale,
+        }
+      );
+      tokensUsed += ai.tokensUsed;
+      costUsd += ai.costUsd;
+      model = ai.model || model;
+      if (ai.snapshot?.pages?.length) {
+        snapshot = {
+          ...ai.snapshot,
+          theme: {
+            ...ai.snapshot.theme,
+            primaryColor: input.spec.visual.primaryColor || ai.snapshot.theme.primaryColor,
+          },
+        };
+      }
+    } catch (err) {
+      await createAnthropicAIRequest({
+        userId: input.userId,
+        projectId: input.projectId,
+        prompt: input.spec.inferredFrom || input.spec.purpose,
+        status: "FAILED",
+        errorMessage: err instanceof Error ? err.message : "Anthropic build failed",
+        model,
+        tokensUsed,
+        costUsd,
+      });
+      throw err;
+    }
+
+    await createAnthropicAIRequest({
+      userId: input.userId,
+      projectId: input.projectId,
+      prompt: input.spec.inferredFrom || input.spec.purpose,
+      status: "COMPLETED",
+      response: `Build: ${snapshot.pages.length} pages`,
+      model,
+      tokensUsed,
+      costUsd,
+    });
+
     const memory = emptyMemory(input.spec);
     await writeSnapshotToProject(input.projectId, snapshot, input.spec, memory);
     await mark("structure", "COMPLETED", `${snapshot.pages.length} pages`);
@@ -417,10 +491,13 @@ async function runEditJob(
     const instruction = input.componentId ? `[component ${input.componentId}] ${input.prompt}` : input.prompt;
     const surgical = applySurgicalEdit(current, instruction, input.componentId);
     let next = surgical.snapshot;
+    const skipClaude =
+      Boolean(input.componentId) ||
+      /צבע|color|כחול|ירוק|אדום|וואטסאפ|whatsapp/.test(input.prompt.toLowerCase());
 
-    const provider = await getAIProvider();
-    if (!input.componentId && !/צבע|color|כחול|ירוק|אדום|וואטסאפ|whatsapp/.test(input.prompt.toLowerCase())) {
+    if (!skipClaude) {
       try {
+        const provider = await getAIProvider();
         const ai = await provider.editProject(current, instruction, {
           userId: input.userId,
           projectId: input.projectId,
@@ -428,8 +505,28 @@ async function runEditJob(
           currentSnapshot: current,
         });
         next = ai.snapshot;
-      } catch {
-        next = surgical.snapshot;
+        await createAnthropicAIRequest({
+          userId: input.userId,
+          projectId: input.projectId,
+          prompt: instruction,
+          status: "COMPLETED",
+          response: ai.explanation,
+          model: ai.model || anthropicModelName(),
+          tokensUsed: ai.tokensUsed,
+          costUsd: ai.costUsd,
+        });
+      } catch (err) {
+        await createAnthropicAIRequest({
+          userId: input.userId,
+          projectId: input.projectId,
+          prompt: instruction,
+          status: "FAILED",
+          errorMessage: err instanceof Error ? err.message : "Anthropic edit failed",
+          model: anthropicModelName(),
+          tokensUsed: 0,
+          costUsd: 0,
+        });
+        throw err;
       }
     }
 

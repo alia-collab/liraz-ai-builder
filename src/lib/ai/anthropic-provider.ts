@@ -1,5 +1,6 @@
 import type { AIProvider, AIContext, AIResponse, ProjectSnapshot } from "./types";
 import { sanitizeProjectOutput } from "./sanitize";
+import { logAiUsageDebug, parseAnthropicUsage } from "./usage";
 
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
@@ -82,7 +83,13 @@ export class AnthropicProvider implements AIProvider {
   private async callAPI(
     systemPrompt: string,
     messages: { role: "user" | "assistant"; content: string }[]
-  ): Promise<{ content: string; inputTokens: number; outputTokens: number }> {
+  ): Promise<{
+    content: string;
+    inputTokens: number;
+    outputTokens: number;
+    tokensUsed: number;
+    costUsd: number;
+  }> {
     const response = await fetch(ANTHROPIC_API_URL, {
       method: "POST",
       headers: {
@@ -108,11 +115,22 @@ export class AnthropicProvider implements AIProvider {
       (block: { type: string }) => block.type === "text"
     );
     const content = textBlock?.text ?? "";
+    const usage = parseAnthropicUsage(data);
+    logAiUsageDebug({
+      model: this.model,
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      tokensUsed: usage.tokensUsed,
+      costUsd: usage.costUsd,
+      path: "anthropic-provider.callAPI",
+    });
 
     return {
       content: this.extractJson(content),
-      inputTokens: data.usage?.input_tokens ?? 0,
-      outputTokens: data.usage?.output_tokens ?? 0,
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      tokensUsed: usage.tokensUsed,
+      costUsd: usage.costUsd,
     };
   }
 
@@ -127,12 +145,8 @@ export class AnthropicProvider implements AIProvider {
     return text.trim();
   }
 
-  private estimateCost(inputTokens: number, outputTokens: number): number {
-    return inputTokens * 0.000003 + outputTokens * 0.000015;
-  }
-
   async generateProject(prompt: string, context: AIContext): Promise<AIResponse> {
-    const { content, inputTokens, outputTokens } = await this.callAPI(
+    const { content, tokensUsed, costUsd } = await this.callAPI(
       `${DESIGN_SYSTEM_PROMPT}\nLocale hint: ${context.locale}.`,
       [
         {
@@ -153,8 +167,9 @@ export class AnthropicProvider implements AIProvider {
       explanation:
         ((parsed as Record<string, unknown>).explanation as string) ||
         "Claude designed the layout, theme, and pages for this project.",
-      tokensUsed: inputTokens + outputTokens,
-      costUsd: this.estimateCost(inputTokens, outputTokens),
+      tokensUsed,
+      costUsd,
+      model: this.model,
     };
   }
 
@@ -163,7 +178,7 @@ export class AnthropicProvider implements AIProvider {
     instruction: string,
     context: AIContext
   ): Promise<AIResponse> {
-    const { content, inputTokens, outputTokens } = await this.callAPI(
+    const { content, tokensUsed, costUsd } = await this.callAPI(
       `${DESIGN_SYSTEM_PROMPT}\nYou are applying a SURGICAL design/content edit. Change only what the user asked. Keep all other pages, copy, and data model. Locale: ${context.locale}.`,
       [
         {
@@ -182,8 +197,9 @@ export class AnthropicProvider implements AIProvider {
     return {
       snapshot: parsed as ProjectSnapshot,
       explanation: `Claude applied: ${instruction}`,
-      tokensUsed: inputTokens + outputTokens,
-      costUsd: this.estimateCost(inputTokens, outputTokens),
+      tokensUsed,
+      costUsd,
+      model: this.model,
     };
   }
 

@@ -5,6 +5,8 @@ import { checkQuota, incrementUsage } from "@/lib/quotas";
 import { getUserOrganization } from "@/lib/deploy";
 import { createAuditLog } from "@/lib/audit";
 import { slugify } from "@/lib/utils";
+import { getAIProvider } from "@/lib/ai";
+import { createAnthropicAIRequest } from "@/lib/ai/log-request";
 import { planFromPrompt } from "@/lib/ai/pipeline/planner";
 import { refineDesignWithClaude } from "@/lib/ai/pipeline/claude-design";
 import { buildSnapshotFromSpec } from "@/lib/ai/pipeline/blueprint";
@@ -13,6 +15,7 @@ import { emptyMemory, mergeSettings } from "@/lib/ai/pipeline/memory";
 import { BUILD_STAGES } from "@/lib/ai/pipeline/types";
 import type { BuildSpec } from "@/lib/ai/pipeline/types";
 import type { ProjectType } from "@prisma/client";
+import type { ProjectSnapshot } from "@/lib/ai/types";
 import { isClaudeConfigured } from "@/lib/ai/anthropic-provider";
 import { seedAppData } from "@/lib/runtime/seed";
 
@@ -40,28 +43,76 @@ export async function POST(request: NextRequest) {
   };
 
   let spec: BuildSpec = body.spec ?? planFromPrompt(String(body.prompt ?? ""), body.projectType);
-  const design = await refineDesignWithClaude(spec);
-  spec = design.spec;
-  if (body.primaryColor) spec.visual.primaryColor = body.primaryColor;
+  const promptForClaude =
+    String(body.prompt ?? "").trim() ||
+    spec.inferredFrom ||
+    `${spec.name}: ${spec.purpose}`;
+
+  let tokensUsed = 0;
+  let costUsd = 0;
+  let model = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514";
+  let aiSnapshot: ProjectSnapshot | null = null;
+
+  try {
+    const design = await refineDesignWithClaude(spec);
+    spec = design.spec;
+    if (body.primaryColor) spec.visual.primaryColor = body.primaryColor;
+    tokensUsed += design.tokensUsed;
+    costUsd += design.costUsd;
+    model = design.model;
+
+    const provider = await getAIProvider();
+    const ai = await provider.generateProject(promptForClaude, {
+      userId: session.user.id,
+      locale: spec.locale,
+    });
+    tokensUsed += ai.tokensUsed;
+    costUsd += ai.costUsd;
+    model = ai.model || model;
+    if (ai.snapshot?.pages?.length) {
+      aiSnapshot = ai.snapshot;
+    }
+  } catch (err) {
+    await createAnthropicAIRequest({
+      userId: session.user.id,
+      prompt: promptForClaude,
+      status: "FAILED",
+      errorMessage: err instanceof Error ? err.message : "Anthropic generation failed",
+      model,
+      tokensUsed,
+      costUsd,
+    });
+    return jsonError(err instanceof Error ? err.message : "AI generation failed", 502);
+  }
 
   const orgSlug = slugify(spec.name) + "-" + Date.now().toString(36).slice(-4);
 
   const project = await prisma.project.create({
     data: {
       organizationId: org.id,
-      name: spec.name,
+      name: (aiSnapshot?.name || spec.name).trim() || spec.name,
       slug: orgSlug,
       description: spec.purpose,
-      type: spec.productType as ProjectType,
-      locale: spec.locale,
-      direction: spec.direction,
+      type: (aiSnapshot?.type || spec.productType) as ProjectType,
+      locale: aiSnapshot?.locale || spec.locale,
+      direction: aiSnapshot?.direction || spec.direction,
       status: "DRAFT",
       settings: {},
     },
   });
 
-  const snapshot = buildSnapshotFromSpec(spec, project.id);
-  snapshot.theme.primaryColor = spec.visual.primaryColor;
+  const snapshot: ProjectSnapshot = aiSnapshot
+    ? {
+        ...aiSnapshot,
+        theme: {
+          ...aiSnapshot.theme,
+          primaryColor: spec.visual.primaryColor || aiSnapshot.theme.primaryColor,
+        },
+      }
+    : buildSnapshotFromSpec(spec, project.id);
+  if (!aiSnapshot) {
+    snapshot.theme.primaryColor = spec.visual.primaryColor;
+  }
 
   const qa = qaSnapshot(snapshot, project.id, spec);
   const memory = emptyMemory(spec);
@@ -78,7 +129,7 @@ export async function POST(request: NextRequest) {
   }
   memory.changelog.push({
     at: new Date().toISOString(),
-    summary: "Initial staged build from approved spec",
+    summary: "Initial staged build from Claude + approved spec",
     files: snapshot.pages.map((p) => `pages/${p.slug}`),
     by: session.user.id,
   });
@@ -120,19 +171,15 @@ export async function POST(request: NextRequest) {
 
   await seedAppData(project.id, spec);
 
-  await prisma.aIRequest.create({
-    data: {
-      userId: session.user.id,
-      projectId: project.id,
-      prompt: spec.inferredFrom,
-      status: qa.passed ? "COMPLETED" : "FAILED",
-      response: qa.passed ? "Build complete" : qa.errors.join("; "),
-      completedAt: new Date(),
-      provider: "ANTHROPIC",
-      model: design.model,
-      tokensUsed: design.tokensUsed,
-      costUsd: design.costUsd,
-    },
+  await createAnthropicAIRequest({
+    userId: session.user.id,
+    projectId: project.id,
+    prompt: promptForClaude,
+    status: qa.passed ? "COMPLETED" : "FAILED",
+    response: qa.passed ? "Build complete" : qa.errors.join("; "),
+    model,
+    tokensUsed,
+    costUsd,
   });
 
   await incrementUsage(session.user.id, "aiRequests");

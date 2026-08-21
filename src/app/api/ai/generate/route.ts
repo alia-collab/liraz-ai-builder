@@ -5,6 +5,8 @@ import { getUserOrganization } from "@/lib/deploy";
 import { requireApiAuth, jsonError, jsonSuccess } from "@/lib/api/helpers";
 import { createAuditLog } from "@/lib/audit";
 import { slugify } from "@/lib/utils";
+import { getAIProvider } from "@/lib/ai";
+import { createAnthropicAIRequest } from "@/lib/ai/log-request";
 import { planFromPrompt } from "@/lib/ai/pipeline/planner";
 import { refineDesignWithClaude } from "@/lib/ai/pipeline/claude-design";
 import { buildSnapshotFromSpec } from "@/lib/ai/pipeline/blueprint";
@@ -15,6 +17,7 @@ import { seedAppData } from "@/lib/runtime/seed";
 import { createProjectVersion } from "@/lib/projects";
 import { isClaudeConfigured } from "@/lib/ai/anthropic-provider";
 import type { ProjectType } from "@prisma/client";
+import type { ProjectSnapshot } from "@/lib/ai/types";
 
 export async function POST(request: NextRequest) {
   const { error, session } = await requireApiAuth();
@@ -45,24 +48,66 @@ export async function POST(request: NextRequest) {
   if (!org) return jsonError("Organization not found", 404);
 
   let spec = planFromPrompt(prompt, projectType || undefined);
-  const design = await refineDesignWithClaude(spec);
-  spec = design.spec;
+  let tokensUsed = 0;
+  let costUsd = 0;
+  let model = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514";
+  let aiSnapshot: ProjectSnapshot | null = null;
+
+  try {
+    const design = await refineDesignWithClaude(spec);
+    spec = design.spec;
+    tokensUsed += design.tokensUsed;
+    costUsd += design.costUsd;
+    model = design.model;
+
+    const provider = await getAIProvider();
+    const ai = await provider.generateProject(prompt, {
+      userId: session.user.id,
+      locale: spec.locale,
+    });
+    tokensUsed += ai.tokensUsed;
+    costUsd += ai.costUsd;
+    model = ai.model || model;
+    if (ai.snapshot?.pages?.length) {
+      aiSnapshot = ai.snapshot;
+    }
+  } catch (err) {
+    await createAnthropicAIRequest({
+      userId: session.user.id,
+      prompt,
+      status: "FAILED",
+      errorMessage: err instanceof Error ? err.message : "Anthropic generation failed",
+      model,
+      tokensUsed,
+      costUsd,
+    });
+    return jsonError(err instanceof Error ? err.message : "AI generation failed", 502);
+  }
 
   const project = await prisma.project.create({
     data: {
       organizationId: org.id,
-      name: spec.name,
+      name: (aiSnapshot?.name || spec.name).trim() || spec.name,
       slug: slugify(spec.name) + "-" + Date.now().toString(36).slice(-4),
       description: spec.purpose,
-      type: spec.productType as ProjectType,
-      locale: spec.locale,
-      direction: spec.direction,
+      type: (aiSnapshot?.type || spec.productType) as ProjectType,
+      locale: aiSnapshot?.locale || spec.locale,
+      direction: aiSnapshot?.direction || spec.direction,
       status: "DRAFT",
       settings: {},
     },
   });
 
-  const snapshot = buildSnapshotFromSpec(spec, project.id);
+  const snapshot: ProjectSnapshot = aiSnapshot
+    ? {
+        ...aiSnapshot,
+        theme: {
+          ...aiSnapshot.theme,
+          primaryColor: spec.visual.primaryColor || aiSnapshot.theme.primaryColor,
+        },
+      }
+    : buildSnapshotFromSpec(spec, project.id);
+
   const qa = qaSnapshot(snapshot, project.id, spec);
   const memory = emptyMemory(spec);
   memory.qa = qa;
@@ -70,19 +115,15 @@ export async function POST(request: NextRequest) {
   await seedAppData(project.id, spec);
   await createProjectVersion(project.id, snapshot, session.user.id, "Generate");
 
-  await prisma.aIRequest.create({
-    data: {
-      userId: session.user.id,
-      projectId: project.id,
-      prompt,
-      status: qa.passed ? "COMPLETED" : "FAILED",
-      response: qa.passed ? spec.typeLabel : qa.errors.join("; "),
-      completedAt: new Date(),
-      provider: "ANTHROPIC",
-      model: design.model,
-      tokensUsed: design.tokensUsed,
-      costUsd: design.costUsd,
-    },
+  await createAnthropicAIRequest({
+    userId: session.user.id,
+    projectId: project.id,
+    prompt,
+    status: qa.passed ? "COMPLETED" : "FAILED",
+    response: qa.passed ? spec.typeLabel : qa.errors.join("; "),
+    model,
+    tokensUsed,
+    costUsd,
   });
 
   await incrementUsage(session.user.id, "aiRequests");
