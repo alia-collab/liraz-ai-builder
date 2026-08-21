@@ -46,11 +46,21 @@ export function firebaseErrorMessage(error: unknown): string {
       return he
         ? "הדומיין לא מורשה ב-Firebase. הוסיפי את lirazai.com ואת localhost ב-Authorized domains."
         : "This domain is not allowed in Firebase. Add lirazai.com and localhost in Firebase authorized domains.";
+    case "auth/api-key-not-valid":
+    case "auth/invalid-api-key":
+      return he
+        ? "מפתח Firebase לא תקין ב-Vercel. מחקי את NEXT_PUBLIC_FIREBASE_API_KEY."
+        : "Invalid Firebase API key in Vercel. Delete NEXT_PUBLIC_FIREBASE_API_KEY and Redeploy.";
     case "auth/operation-not-allowed":
       return he
         ? "שיטת ההתחברות הזו כבויה ב-Firebase Console."
         : "This sign-in method is disabled in Firebase Console.";
     default:
+      if (code.includes("api-key-not-valid") || code.includes("invalid-api-key")) {
+        return he
+          ? "מפתח Firebase לא תקין ב-Vercel. מחקי את NEXT_PUBLIC_FIREBASE_API_KEY."
+          : "Invalid Firebase API key in Vercel. Delete NEXT_PUBLIC_FIREBASE_API_KEY and Redeploy.";
+      }
       if (message && message !== "Sign-in failed") return message;
       return he ? "ההתחברות נכשלה. נסי שוב." : "Sign-in failed. Try again.";
   }
