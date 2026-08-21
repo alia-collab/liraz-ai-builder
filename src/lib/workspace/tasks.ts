@@ -1,6 +1,7 @@
 import type { ChatMessageKind, BuildTaskStatus, Prisma } from "@prisma/client";
 import prisma from "@/lib/db";
 import { emitWorkspace } from "./events";
+import { AGENT_BUILD_STAGES, AGENT_EDIT_STAGES, stagesToBuildTasks } from "@/lib/agent/stages";
 
 export async function addChatMessage(input: {
   projectId: string;
@@ -31,13 +32,14 @@ export async function setTaskStatus(
   extra?: Prisma.InputJsonValue
 ) {
   const now = new Date();
+  const existing = await prisma.buildTask.findUnique({ where: { id: taskId } });
   const task = await prisma.buildTask.update({
     where: { id: taskId },
     data: {
       status,
       detail,
       metadata: extra ?? undefined,
-      startedAt: status === "RUNNING" ? now : undefined,
+      startedAt: status === "RUNNING" ? now : existing?.startedAt ?? undefined,
       completedAt: ["COMPLETED", "FAILED", "FIXED", "CANCELLED"].includes(status) ? now : undefined,
     },
   });
@@ -56,26 +58,12 @@ export async function updateJob(
 
 export const PLAN_TASKS = [
   { key: "received", titleHe: "הבקשה התקבלה", titleEn: "Request received", descriptionHe: "ההודעה נשמרה.", descriptionEn: "The message was saved." },
-  { key: "analyzing", titleHe: "ניתוח דרישות", titleEn: "Analyzing requirements", descriptionHe: "מזהה עמודים, משתמשים ופעולות.", descriptionEn: "Detecting pages, users, and actions." },
-  { key: "planning", titleHe: "יצירת תוכנית", titleEn: "Creating a plan", descriptionHe: "מכין כרטיס תוכנית לאישור.", descriptionEn: "Preparing a plan card for approval." },
+  { key: "analyzing", titleHe: "ניתוח דרישות", titleEn: "ANALYZE", descriptionHe: "מזהה עמודים, משתמשים ופעולות.", descriptionEn: "Detecting pages, users, and actions." },
+  { key: "planning", titleHe: "יצירת תוכנית", titleEn: "PLAN", descriptionHe: "מכין כרטיס תוכנית לאישור.", descriptionEn: "Preparing a plan card for approval." },
 ] as const;
 
-export const BUILD_TASKS = [
-  { key: "received", titleHe: "הבקשה התקבלה", titleEn: "Request received", descriptionHe: "התוכנית אושרה.", descriptionEn: "The plan was approved." },
-  { key: "structure", titleHe: "בניית מבנה", titleEn: "Building structure", descriptionHe: "יוצר ניווט, עמודים ורכיבים.", descriptionEn: "Creating navigation, pages, and components." },
-  { key: "design", titleHe: "עיצוב הממשק", titleEn: "Designing the UI", descriptionHe: "מגדיר צבעים, גופנים ומרווחים.", descriptionEn: "Setting colors, fonts, and spacing." },
-  { key: "database", titleHe: "מסד הנתונים", titleEn: "Database", descriptionHe: "יוצר אוספים, קשרים והרשאות.", descriptionEn: "Creating collections, relations, and access." },
-  { key: "auth", titleHe: "הרשמה והתחברות", titleEn: "Auth", descriptionHe: "מחבר חשבונות לפי התוכנית.", descriptionEn: "Connecting accounts from the plan." },
-  { key: "forms", titleHe: "טפסים וקישורים", titleEn: "Forms and links", descriptionHe: "מוודא שטפסים נשמרים וקישורים חיים.", descriptionEn: "Checking forms save and links resolve." },
-  { key: "mobile", titleHe: "התאמה למובייל", titleEn: "Mobile layout", descriptionHe: "בודק תצוגה לטלפון.", descriptionEn: "Checking phone layout." },
-  { key: "testing", titleHe: "בדיקות סופיות", titleEn: "Final checks", descriptionHe: "בדיקות אמיתיות על המבנה.", descriptionEn: "Real checks against the snapshot." },
-  { key: "preview", titleHe: "תצוגה מקדימה", titleEn: "Preview ready", descriptionHe: "מעדכן את התצוגה המקדימה.", descriptionEn: "Refreshing the live preview." },
-] as const;
+/** Full autonomous build stages — streamed via BuildTask. */
+export const BUILD_TASKS = stagesToBuildTasks(AGENT_BUILD_STAGES);
 
-export const EDIT_TASKS = [
-  { key: "received", titleHe: "הבקשה התקבלה", titleEn: "Request received", descriptionHe: "השינוי נקלט.", descriptionEn: "The change was received." },
-  { key: "analyzing", titleHe: "ניתוח השינוי", titleEn: "Analyzing the change", descriptionHe: "מזהה עמוד ורכיב.", descriptionEn: "Identifying page and component." },
-  { key: "structure", titleHe: "החלת השינוי", titleEn: "Applying the change", descriptionHe: "מעדכן רק את החלקים הרלוונטיים.", descriptionEn: "Updating only related parts." },
-  { key: "testing", titleHe: "בדיקה", titleEn: "Testing", descriptionHe: "מוודא שהשינוי לא שבר קישורים או טפסים.", descriptionEn: "Ensuring links and forms still work." },
-  { key: "preview", titleHe: "עדכון תצוגה", titleEn: "Preview update", descriptionHe: "מרענן את התצוגה המקדימה.", descriptionEn: "Refreshing preview." },
-] as const;
+/** Autonomous edit stages with project-aware repair. */
+export const EDIT_TASKS = stagesToBuildTasks(AGENT_EDIT_STAGES);

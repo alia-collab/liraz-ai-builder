@@ -7,6 +7,15 @@ import { createAuditLog } from "@/lib/audit";
 import { slugify } from "@/lib/utils";
 import { getAIProvider } from "@/lib/ai";
 import { createAnthropicAIRequest } from "@/lib/ai/log-request";
+import {
+  AICreditsExhaustedError,
+  AI_CREDITS_EXHAUSTED_CODE,
+  AI_CREDITS_EXHAUSTED_MESSAGE,
+  costUsdToCredits,
+  finalizeAICredits,
+  releaseReservation,
+  reserveCredits,
+} from "@/lib/ai-credits";
 import { planFromPrompt } from "@/lib/ai/pipeline/planner";
 import { refineDesignWithClaude } from "@/lib/ai/pipeline/claude-design";
 import { buildSnapshotFromSpec } from "@/lib/ai/pipeline/blueprint";
@@ -48,12 +57,16 @@ export async function POST(request: NextRequest) {
   if (!org) return jsonError("Organization not found", 404);
 
   let spec = planFromPrompt(prompt, projectType || undefined);
+  let reservationId: string | undefined;
   let tokensUsed = 0;
   let costUsd = 0;
   let model = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514";
   let aiSnapshot: ProjectSnapshot | null = null;
 
   try {
+    const reserved = await reserveCredits(session.user.id);
+    reservationId = reserved.reservationId;
+
     const design = await refineDesignWithClaude(spec);
     spec = design.spec;
     tokensUsed += design.tokensUsed;
@@ -72,6 +85,12 @@ export async function POST(request: NextRequest) {
       aiSnapshot = ai.snapshot;
     }
   } catch (err) {
+    if (reservationId) {
+      await releaseReservation(reservationId, err instanceof Error ? err.message : "AI failed");
+    }
+    if (err instanceof AICreditsExhaustedError) {
+      return jsonError(AI_CREDITS_EXHAUSTED_MESSAGE, 402, AI_CREDITS_EXHAUSTED_CODE);
+    }
     await createAnthropicAIRequest({
       userId: session.user.id,
       prompt,
@@ -115,7 +134,8 @@ export async function POST(request: NextRequest) {
   await seedAppData(project.id, spec);
   await createProjectVersion(project.id, snapshot, session.user.id, "Generate");
 
-  await createAnthropicAIRequest({
+  const creditsUsed = costUsdToCredits(costUsd);
+  const aiRequest = await createAnthropicAIRequest({
     userId: session.user.id,
     projectId: project.id,
     prompt,
@@ -124,7 +144,12 @@ export async function POST(request: NextRequest) {
     model,
     tokensUsed,
     costUsd,
+    creditsUsed,
   });
+
+  if (reservationId) {
+    await finalizeAICredits({ reservationId, costUsd, aiRequestId: aiRequest.id });
+  }
 
   await incrementUsage(session.user.id, "aiRequests");
   await incrementUsage(session.user.id, "projects");

@@ -19,6 +19,7 @@ const navItems: Array<{
 }> = [
   { href: "/dashboard", icon: LayoutDashboard, labelKey: "dashboard", useCommon: true },
   { href: "/dashboard/projects", icon: FolderOpen, labelKey: "myProjects" },
+  { href: "/dashboard/credits", icon: Sparkles, labelKey: "credits" },
   { href: "/dashboard/usage", icon: BarChart3, labelKey: "usage" },
   { href: "/dashboard/billing", icon: CreditCard, labelKey: "billing" },
   { href: "/dashboard/team", icon: Users, labelKey: "team" },

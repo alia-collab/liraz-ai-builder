@@ -90,6 +90,14 @@ async function grantPayingAccess(userId: string) {
   });
 }
 
+async function grantCreditsIfActive(paypalSubscriptionId: string | null | undefined) {
+  if (!paypalSubscriptionId) return;
+  const sub = await prisma.subscription.findUnique({ where: { paypalSubscriptionId } });
+  if (!sub) return;
+  const { grantCreditsForSubscription } = await import("@/lib/ai-credits/subscription");
+  await grantCreditsForSubscription(sub.id);
+}
+
 export async function syncSubscriptionFromPaypal(
   paypalSubscriptionId: string,
   extras?: { payerId?: string; forceStatus?: SubscriptionStatus }
@@ -218,10 +226,21 @@ export async function applyPaypalWebhookEvent(event: PaypalWebhookEvent): Promis
         });
       }
     }
+    await grantCreditsIfActive(paypalSubscriptionId);
     return { action, activated: result.activated, skipped: false };
   }
 
   if (action === "renew") {
+    const rawCustom = extractPaypalCustomId(event);
+    if (captureId && rawCustom?.startsWith("credit_purchase:")) {
+      const { grantCreditsFromPaypalCapture } = await import("@/lib/ai-credits/purchases");
+      await grantCreditsFromPaypalCapture({
+        paypalCaptureId: captureId,
+        customId: rawCustom,
+      });
+      return { action: "credit_purchase", activated: false, skipped: false };
+    }
+
     if (paypalSubscriptionId) {
       const result = await syncSubscriptionFromPaypal(paypalSubscriptionId, { payerId });
       const sub = await prisma.subscription.findUnique({ where: { paypalSubscriptionId } });
@@ -249,6 +268,7 @@ export async function applyPaypalWebhookEvent(event: PaypalWebhookEvent): Promis
           metadata: { amountUsd, captureId, eventType: event.event_type },
         });
       }
+      await grantCreditsIfActive(paypalSubscriptionId);
       return { action, activated: result.activated, skipped: false };
     }
     return { action, activated: false, skipped: true };

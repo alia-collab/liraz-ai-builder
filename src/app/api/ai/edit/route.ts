@@ -3,7 +3,12 @@ import { z } from "zod";
 import prisma from "@/lib/db";
 import { getAIProvider } from "@/lib/ai";
 import type { ProjectSnapshot } from "@/lib/ai/types";
-import { createAnthropicAIRequest, anthropicModelName } from "@/lib/ai/log-request";
+import {
+  AICreditsExhaustedError,
+  AI_CREDITS_EXHAUSTED_CODE,
+  AI_CREDITS_EXHAUSTED_MESSAGE,
+  runClaudeWithCredits,
+} from "@/lib/ai-credits";
 import { createProjectVersion } from "@/lib/projects";
 import { checkQuota, incrementUsage } from "@/lib/quotas";
 import { requireApiAuth, jsonError, jsonSuccess } from "@/lib/api/helpers";
@@ -89,37 +94,26 @@ export async function POST(request: NextRequest) {
 
   if (!skipClaude) {
     try {
-      const provider = await getAIProvider();
-      const ai = await provider.editProject(currentSnapshot, instruction, {
+      const { result: ai } = await runClaudeWithCredits({
         userId: session.user.id,
         projectId: project.id,
-        locale: project.locale,
-        currentSnapshot,
+        prompt: instruction,
+        run: async () => {
+          const provider = await getAIProvider();
+          return provider.editProject(currentSnapshot, instruction, {
+            userId: session.user.id,
+            projectId: project.id,
+            locale: project.locale,
+            currentSnapshot,
+          });
+        },
       });
       nextSnapshot = ai.snapshot;
       explanation = ai.explanation || surgical.summary;
-
-      await createAnthropicAIRequest({
-        userId: session.user.id,
-        projectId: project.id,
-        prompt: instruction,
-        status: "COMPLETED",
-        response: explanation,
-        model: ai.model || anthropicModelName(),
-        tokensUsed: ai.tokensUsed,
-        costUsd: ai.costUsd,
-      });
     } catch (err) {
-      await createAnthropicAIRequest({
-        userId: session.user.id,
-        projectId: project.id,
-        prompt: instruction,
-        status: "FAILED",
-        response: null,
-        errorMessage: err instanceof Error ? err.message : "Anthropic edit failed",
-        tokensUsed: 0,
-        costUsd: 0,
-      });
+      if (err instanceof AICreditsExhaustedError) {
+        return jsonError(AI_CREDITS_EXHAUSTED_MESSAGE, 402, AI_CREDITS_EXHAUSTED_CODE);
+      }
       return jsonError(err instanceof Error ? err.message : "AI edit failed", 502);
     }
   }

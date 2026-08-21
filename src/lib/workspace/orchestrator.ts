@@ -1,19 +1,18 @@
 import prisma from "@/lib/db";
 import { planFromPrompt } from "@/lib/ai/pipeline/planner";
 import { refineDesignWithClaude } from "@/lib/ai/pipeline/claude-design";
-import { buildSnapshotFromSpec } from "@/lib/ai/pipeline/blueprint";
-import { qaSnapshot, applySurgicalEdit } from "@/lib/ai/pipeline/qa";
-import { emptyMemory } from "@/lib/ai/pipeline/memory";
-import { getAIProvider } from "@/lib/ai";
-import { createAnthropicAIRequest, anthropicModelName } from "@/lib/ai/log-request";
+import {
+  AICreditsExhaustedError,
+  AI_CREDITS_EXHAUSTED_MESSAGE,
+  runClaudeWithCredits,
+} from "@/lib/ai-credits";
+import { runBuilderBuild, runBuilderEdit } from "@/lib/builder/orchestrator";
 import { createProjectVersion } from "@/lib/projects";
 import { incrementUsage } from "@/lib/quotas";
 import type { BuildSpec } from "@/lib/ai/pipeline/types";
-import type { ProjectSnapshot } from "@/lib/ai/types";
 import { addChatMessage, setTaskStatus, updateJob, PLAN_TASKS, BUILD_TASKS, EDIT_TASKS } from "./tasks";
-import { writeSnapshotToProject, currentSnapshotFromProject } from "./persist";
+import { currentSnapshotFromProject } from "./persist";
 import { emitWorkspace } from "./events";
-import { seedAppData } from "@/lib/runtime/seed";
 
 async function cancelled(jobId: string) {
   const job = await prisma.buildJob.findUnique({ where: { id: jobId }, select: { cancelRequested: true } });
@@ -89,14 +88,16 @@ export async function startPlanJob(input: {
     jobId: job.id,
     role: "assistant",
     kind: "ASSISTANT",
-    content: he ? "הבנתי. אני מנתח את הבקשה ומכין תוכנית בנייה." : "Got it. I am analyzing the request and preparing a build plan.",
+    content: he
+      ? "הבנתי. אני מנתח את הדרישה המלאה ומכין תוכנית מימוש מפורטת."
+      : "Got it. I am analyzing the full requirement and preparing a detailed implementation plan.",
   });
   await addChatMessage({
     projectId: input.projectId,
     jobId: job.id,
     role: "assistant",
     kind: "ACTIVITY",
-    content: he ? "אני מזהה את העמודים, המשתמשים והפעולות הנדרשות." : "I am identifying the pages, users, and required actions.",
+    content: he ? "מזהה עמודים, משתמשים, מודלים וזרימות." : "Identifying pages, users, data models, and workflows.",
     payload: { key: "analyzing", status: "RUNNING" },
   });
 
@@ -110,21 +111,39 @@ export async function startPlanJob(input: {
     }
 
     let spec = planFromPrompt(input.prompt, input.projectType);
-    const design = await refineDesignWithClaude(spec);
-    spec = design.spec;
-
-    await createAnthropicAIRequest({
+    const { result: design } = await runClaudeWithCredits({
       userId: input.userId,
       projectId: input.projectId,
       prompt: input.prompt,
-      status: "COMPLETED",
-      response: `Plan design: ${spec.typeLabel}`,
-      model: design.model,
-      tokensUsed: design.tokensUsed,
-      costUsd: design.costUsd,
+      run: async () => {
+        const d = await refineDesignWithClaude(spec);
+        spec = d.spec;
+        return {
+          tokensUsed: d.tokensUsed,
+          costUsd: d.costUsd,
+          model: d.model,
+          explanation: `Plan design: ${spec.typeLabel}`,
+        };
+      },
     });
+    void design;
 
-    if (analyzing) await setTaskStatus(analyzing.id, "COMPLETED", spec.typeLabel);
+    if (analyzing) {
+      await setTaskStatus(
+        analyzing.id,
+        "COMPLETED",
+        spec.typeLabel,
+        JSON.parse(
+          JSON.stringify({
+            pages: spec.pages.map((p) => p.slug),
+            roles: spec.userRoles,
+            forms: spec.forms,
+            dataModel: spec.dataModel,
+            successCriteria: spec.successCriteria,
+          })
+        )
+      );
+    }
     const planning = await prisma.buildTask.findFirst({ where: { jobId: job.id, key: "planning" } });
     if (planning) await setTaskStatus(planning.id, "RUNNING");
 
@@ -133,7 +152,14 @@ export async function startPlanJob(input: {
       data: { spec: spec as object, status: "AWAITING_APPROVAL" },
     });
 
-    if (planning) await setTaskStatus(planning.id, "NEEDS_APPROVAL", he ? "ממתין לאישור התוכנית" : "Waiting for plan approval");
+    if (planning) {
+      await setTaskStatus(
+        planning.id,
+        "NEEDS_APPROVAL",
+        he ? "ממתין לאישור התוכנית" : "Waiting for plan approval",
+        JSON.parse(JSON.stringify({ criteria: spec.successCriteria }))
+      );
+    }
 
     await addChatMessage({
       projectId: input.projectId,
@@ -148,22 +174,23 @@ export async function startPlanJob(input: {
     return job.id;
   } catch (err) {
     if (analyzing) await setTaskStatus(analyzing.id, "FAILED", err instanceof Error ? err.message : "plan failed");
-    await createAnthropicAIRequest({
-      userId: input.userId,
-      projectId: input.projectId,
-      prompt: input.prompt,
-      status: "FAILED",
-      errorMessage: err instanceof Error ? err.message : "plan failed",
-      model: anthropicModelName(),
-      tokensUsed: 0,
-      costUsd: 0,
-    });
-    await failJob(job.id, input.projectId, he ? "הניתוח נכשל. אפשר לנסות לתקן." : "Analysis failed. You can try to fix it.");
+    const msg =
+      err instanceof AICreditsExhaustedError
+        ? AI_CREDITS_EXHAUSTED_MESSAGE
+        : he
+          ? "הניתוח נכשל. אפשר לנסות לתקן."
+          : "Analysis failed. You can try to fix it.";
+    await failJob(job.id, input.projectId, msg);
     throw err;
   }
 }
 
-export async function startBuildFromPlan(input: { projectId: string; userId: string; jobId: string; locale: "HE" | "EN" }) {
+export async function startBuildFromPlan(input: {
+  projectId: string;
+  userId: string;
+  jobId: string;
+  locale: "HE" | "EN";
+}) {
   const planJob = await prisma.buildJob.findFirst({
     where: { id: input.jobId, projectId: input.projectId },
   });
@@ -199,9 +226,7 @@ export async function startBuildFromPlan(input: { projectId: string; userId: str
       title: he ? t.titleHe : t.titleEn,
       description: he ? t.descriptionHe : t.descriptionEn,
       sortOrder: i,
-      status: i === 0 ? "COMPLETED" : "PENDING",
-      startedAt: i === 0 ? new Date() : undefined,
-      completedAt: i === 0 ? new Date() : undefined,
+      status: "PENDING",
     })),
   });
 
@@ -210,8 +235,10 @@ export async function startBuildFromPlan(input: { projectId: string; userId: str
     jobId: job.id,
     role: "assistant",
     kind: "ACTIVITY",
-    content: he ? "יוצר את הניווט, העמודים והרכיבים הראשיים." : "Creating navigation, pages, and main components.",
-    payload: { key: "structure", status: "RUNNING" },
+    content: he
+      ? "סוכן הבנייה האוטונומי מתחיל: ניתוח → מימוש → בדיקות → תיקון."
+      : "Autonomous build agent starting: analyze → implement → test → repair.",
+    payload: { key: "analyze", status: "RUNNING" },
   });
 
   runBuildJob({ ...input, jobId: job.id, spec }).catch((err) => {
@@ -221,189 +248,38 @@ export async function startBuildFromPlan(input: { projectId: string; userId: str
   return job.id;
 }
 
-async function runBuildJob(input: { projectId: string; userId: string; jobId: string; locale: "HE" | "EN"; spec: BuildSpec }) {
-  const he = input.locale === "HE";
+async function runBuildJob(input: {
+  projectId: string;
+  userId: string;
+  jobId: string;
+  locale: "HE" | "EN";
+  spec: BuildSpec;
+}) {
+  const previous = await currentSnapshotFromProject(input.projectId);
+  if (previous && previous.pages.length > 0) {
+    await createProjectVersion(input.projectId, previous, input.userId, "checkpoint before autonomous build");
+  }
+
+  if (await cancelled(input.jobId)) {
+    await updateJob(input.jobId, { status: "CANCELLED", completedAt: new Date() });
+    return;
+  }
+
   const tasks = await prisma.buildTask.findMany({ where: { jobId: input.jobId }, orderBy: { sortOrder: "asc" } });
   const byKey = Object.fromEntries(tasks.map((t) => [t.key, t]));
 
-  const mark = async (key: string, status: "RUNNING" | "COMPLETED" | "FAILED" | "CANCELLED", detail?: string) => {
-    const t = byKey[key];
-    if (t) await setTaskStatus(t.id, status, detail);
-  };
+  await runBuilderBuild({
+    projectId: input.projectId,
+    userId: input.userId,
+    jobId: input.jobId,
+    locale: input.locale,
+    spec: input.spec,
+    byKey,
+  });
 
-  try {
-    const previous = await currentSnapshotFromProject(input.projectId);
-    if (previous && previous.pages.length > 0) {
-      await createProjectVersion(input.projectId, previous, input.userId, "checkpoint before build");
-    }
-
-    if (await cancelled(input.jobId)) {
-      for (const t of tasks) if (t.status === "PENDING" || t.status === "RUNNING") await setTaskStatus(t.id, "CANCELLED");
-      await updateJob(input.jobId, { status: "CANCELLED", completedAt: new Date() });
-      return;
-    }
-
-    await mark("structure", "RUNNING");
-    let tokensUsed = 0;
-    let costUsd = 0;
-    let model = anthropicModelName();
-    let snapshot: ProjectSnapshot = buildSnapshotFromSpec(input.spec, input.projectId);
-
-    try {
-      const provider = await getAIProvider();
-      const ai = await provider.generateProject(
-        input.spec.inferredFrom || `${input.spec.name}: ${input.spec.purpose}`,
-        {
-          userId: input.userId,
-          projectId: input.projectId,
-          locale: input.spec.locale,
-        }
-      );
-      tokensUsed += ai.tokensUsed;
-      costUsd += ai.costUsd;
-      model = ai.model || model;
-      if (ai.snapshot?.pages?.length) {
-        snapshot = {
-          ...ai.snapshot,
-          theme: {
-            ...ai.snapshot.theme,
-            primaryColor: input.spec.visual.primaryColor || ai.snapshot.theme.primaryColor,
-          },
-        };
-      }
-    } catch (err) {
-      await createAnthropicAIRequest({
-        userId: input.userId,
-        projectId: input.projectId,
-        prompt: input.spec.inferredFrom || input.spec.purpose,
-        status: "FAILED",
-        errorMessage: err instanceof Error ? err.message : "Anthropic build failed",
-        model,
-        tokensUsed,
-        costUsd,
-      });
-      throw err;
-    }
-
-    await createAnthropicAIRequest({
-      userId: input.userId,
-      projectId: input.projectId,
-      prompt: input.spec.inferredFrom || input.spec.purpose,
-      status: "COMPLETED",
-      response: `Build: ${snapshot.pages.length} pages`,
-      model,
-      tokensUsed,
-      costUsd,
-    });
-
-    const memory = emptyMemory(input.spec);
-    await writeSnapshotToProject(input.projectId, snapshot, input.spec, memory);
-    await mark("structure", "COMPLETED", `${snapshot.pages.length} pages`);
-    await addChatMessage({
-      projectId: input.projectId,
-      jobId: input.jobId,
-      role: "assistant",
-      kind: "FILES",
-      content: he ? `${snapshot.pages.length} קבצים עודכנו` : `${snapshot.pages.length} files updated`,
-      payload: {
-        files: snapshot.pages.map((p) => ({ name: `pages/${p.slug}`, action: "created", page: p.title, summary: p.seo?.description ?? p.title })),
-      },
-    });
-    emitWorkspace(input.projectId, "preview", { path: `/preview/${input.projectId}/home` });
-
-    if (await cancelled(input.jobId)) {
-      await updateJob(input.jobId, { status: "CANCELLED", completedAt: new Date() });
-      return;
-    }
-
-    await mark("design", "RUNNING");
-    await addChatMessage({
-      projectId: input.projectId,
-      jobId: input.jobId,
-      role: "assistant",
-      kind: "ACTIVITY",
-      content: he ? "מגדיר צבעים, גופנים, כפתורים ומרווחים אחידים." : "Setting colors, fonts, buttons, and spacing.",
-      payload: { key: "design", status: "RUNNING" },
-    });
-    await mark("design", "COMPLETED", input.spec.visual.style);
-
-    await mark("database", "RUNNING");
-    await addChatMessage({
-      projectId: input.projectId,
-      jobId: input.jobId,
-      role: "assistant",
-      kind: "ACTIVITY",
-      content: he ? "יוצר טבלאות, קשרים והרשאות גישה." : "Creating tables, relations, and access rules.",
-      payload: { key: "database", status: "RUNNING" },
-    });
-    await seedAppData(input.projectId, input.spec);
-    await mark("database", "COMPLETED", input.spec.dataModel.map((t) => t.name).join(", "));
-
-    await mark("auth", "RUNNING");
-    await mark("auth", "COMPLETED", input.spec.integrations.auth ? (he ? "עמודי התחברות נוצרו" : "Auth pages created") : (he ? "לא נדרש בתוכנית" : "Not in this plan"));
-
-    await mark("forms", "RUNNING");
-    await mark("forms", "COMPLETED", he ? "טפסי פנייה שומרים למסד" : "Lead forms persist");
-
-    await mark("mobile", "RUNNING");
-    await mark("mobile", "COMPLETED", he ? "פריסה רספונסיבית" : "Responsive layout");
-
-    await mark("testing", "RUNNING");
-    await addChatMessage({
-      projectId: input.projectId,
-      jobId: input.jobId,
-      role: "assistant",
-      kind: "ACTIVITY",
-      content: he ? "בודק טפסים, קישורים, התחברות והתאמה למובייל." : "Checking forms, links, auth, and mobile.",
-      payload: { key: "testing", status: "RUNNING" },
-    });
-    const qa = qaSnapshot(snapshot, input.projectId, input.spec);
-    memory.qa = qa;
-    memory.buildLog = BUILD_TASKS.map((s) => ({
-      stage: s.key,
-      status: s.key === "testing" && !qa.passed ? "failed" : "done",
-      detail: s.key === "testing" ? (qa.passed ? "QA passed" : qa.errors.join("; ")) : "ok",
-    }));
-    await writeSnapshotToProject(input.projectId, snapshot, input.spec, memory);
-    await createProjectVersion(input.projectId, snapshot, input.userId, "Build");
-
-    if (!qa.passed) {
-      await mark("testing", "FAILED", qa.errors.join("; "));
-      await failJob(input.jobId, input.projectId, he ? `בדיקות קריטיות נכשלו: ${qa.errors.join("; ")}` : `Critical checks failed: ${qa.errors.join("; ")}`);
-      return;
-    }
-    await mark("testing", "COMPLETED", he ? `${qa.errors.length} שגיאות, ${qa.warnings.length} אזהרות` : `${qa.errors.length} errors, ${qa.warnings.length} warnings`);
-
-    await mark("preview", "RUNNING");
-    await mark("preview", "COMPLETED");
-    emitWorkspace(input.projectId, "preview", { path: `/preview/${input.projectId}/home` });
-
-    const setupNeeded = input.spec.needsSetup.filter((s) => s.status === "needed");
-    await addChatMessage({
-      projectId: input.projectId,
-      jobId: input.jobId,
-      role: "assistant",
-      kind: "READY",
-      content: he ? "הפרויקט מוכן" : "The project is ready",
-        payload: JSON.parse(JSON.stringify({
-          pages: snapshot.pages.length,
-          functions: input.spec.actions,
-          testsPassed: qa.passed,
-          testsWarnings: qa.warnings.length,
-          issuesFixed: 0,
-          needsSetup: setupNeeded,
-          qa,
-        })),
-    });
-
-    await updateJob(input.jobId, {
-      status: "COMPLETED",
-      completedAt: new Date(),
-      result: { qa, pages: snapshot.pages.length } as object,
-    });
+  const job = await prisma.buildJob.findUnique({ where: { id: input.jobId } });
+  if (job?.status === "COMPLETED") {
     await incrementUsage(input.userId, "aiRequests");
-  } catch (err) {
-    await failJob(input.jobId, input.projectId, err instanceof Error ? err.message : "Build failed");
   }
 }
 
@@ -437,9 +313,7 @@ export async function startEditJob(input: {
       title: he ? t.titleHe : t.titleEn,
       description: he ? t.descriptionHe : t.descriptionEn,
       sortOrder: i,
-      status: i === 0 ? "COMPLETED" : "PENDING",
-      startedAt: i === 0 ? new Date() : undefined,
-      completedAt: i === 0 ? new Date() : undefined,
+      status: "PENDING",
     })),
   });
 
@@ -448,7 +322,9 @@ export async function startEditJob(input: {
     jobId: job.id,
     role: "user",
     kind: "USER",
-    content: input.componentId ? `[${input.pageSlug ?? "page"} / ${input.componentId}] ${input.prompt}` : input.prompt,
+    content: input.componentId
+      ? `[${input.pageSlug ?? "page"} / ${input.componentId}] ${input.prompt}`
+      : input.prompt,
     payload: { componentId: input.componentId, pageSlug: input.pageSlug },
   });
   await addChatMessage({
@@ -456,7 +332,9 @@ export async function startEditJob(input: {
     jobId: job.id,
     role: "assistant",
     kind: "ASSISTANT",
-    content: he ? "הבנתי. אני מנתח את הבקשה ומכין תוכנית בנייה." : "Got it. I am analyzing the request and preparing a build plan.",
+    content: he
+      ? "הבנתי. אני בודק את המבנה הקיים ומתכנן שינוי ממוקד."
+      : "Got it. I am inspecting the current project and planning a targeted change.",
   });
 
   runEditJob(input, job.id).catch((err) => console.error("edit job failed", err));
@@ -464,120 +342,43 @@ export async function startEditJob(input: {
 }
 
 async function runEditJob(
-  input: { projectId: string; userId: string; prompt: string; componentId?: string; pageSlug?: string; locale: "HE" | "EN" },
+  input: {
+    projectId: string;
+    userId: string;
+    prompt: string;
+    componentId?: string;
+    pageSlug?: string;
+    locale: "HE" | "EN";
+  },
   jobId: string
 ) {
-  const he = input.locale === "HE";
+  if (await cancelled(jobId)) {
+    await updateJob(jobId, { status: "CANCELLED", completedAt: new Date() });
+    return;
+  }
+
   const tasks = await prisma.buildTask.findMany({ where: { jobId }, orderBy: { sortOrder: "asc" } });
   const byKey = Object.fromEntries(tasks.map((t) => [t.key, t]));
-  const mark = async (key: string, status: "RUNNING" | "COMPLETED" | "FAILED", detail?: string) => {
-    const t = byKey[key];
-    if (t) await setTaskStatus(t.id, status, detail);
-  };
 
-  try {
-    await mark("analyzing", "RUNNING");
-    const current = await currentSnapshotFromProject(input.projectId);
-    if (!current) throw new Error("No snapshot");
-    await createProjectVersion(input.projectId, current, input.userId, `checkpoint before: ${input.prompt.slice(0, 40)}`);
-    await mark("analyzing", "COMPLETED");
+  await runBuilderEdit({
+    projectId: input.projectId,
+    userId: input.userId,
+    jobId,
+    locale: input.locale,
+    prompt: input.prompt,
+    componentId: input.componentId,
+    pageSlug: input.pageSlug,
+    byKey,
+  });
 
-    if (await cancelled(jobId)) {
-      await updateJob(jobId, { status: "CANCELLED", completedAt: new Date() });
-      return;
-    }
-
-    await mark("structure", "RUNNING");
-    const instruction = input.componentId ? `[component ${input.componentId}] ${input.prompt}` : input.prompt;
-    const surgical = applySurgicalEdit(current, instruction, input.componentId);
-    let next = surgical.snapshot;
-    const skipClaude =
-      Boolean(input.componentId) ||
-      /צבע|color|כחול|ירוק|אדום|וואטסאפ|whatsapp/.test(input.prompt.toLowerCase());
-
-    if (!skipClaude) {
-      try {
-        const provider = await getAIProvider();
-        const ai = await provider.editProject(current, instruction, {
-          userId: input.userId,
-          projectId: input.projectId,
-          locale: current.locale,
-          currentSnapshot: current,
-        });
-        next = ai.snapshot;
-        await createAnthropicAIRequest({
-          userId: input.userId,
-          projectId: input.projectId,
-          prompt: instruction,
-          status: "COMPLETED",
-          response: ai.explanation,
-          model: ai.model || anthropicModelName(),
-          tokensUsed: ai.tokensUsed,
-          costUsd: ai.costUsd,
-        });
-      } catch (err) {
-        await createAnthropicAIRequest({
-          userId: input.userId,
-          projectId: input.projectId,
-          prompt: instruction,
-          status: "FAILED",
-          errorMessage: err instanceof Error ? err.message : "Anthropic edit failed",
-          model: anthropicModelName(),
-          tokensUsed: 0,
-          costUsd: 0,
-        });
-        throw err;
-      }
-    }
-
-    const project = await prisma.project.findUnique({ where: { id: input.projectId } });
-    const spec = ((project?.settings as { spec?: BuildSpec } | null)?.spec) ?? undefined;
-    const qa = qaSnapshot(next, input.projectId, spec);
-    if (!qa.passed) {
-      await mark("testing", "FAILED", qa.errors.join("; "));
-      await failJob(jobId, input.projectId, he ? `השינוי נחסם בבדיקה: ${qa.errors.join("; ")}` : `Change blocked: ${qa.errors.join("; ")}`);
-      return;
-    }
-
-    const memory = emptyMemory(spec ?? planFromPrompt(input.prompt));
-    memory.qa = qa;
-    memory.changelog.push({
-      at: new Date().toISOString(),
-      summary: surgical.summary,
-      files: surgical.files,
-      by: input.userId,
-    });
-    await writeSnapshotToProject(input.projectId, next, spec ?? planFromPrompt(input.prompt), memory);
-    await mark("structure", "COMPLETED", surgical.summary);
-    await mark("testing", "RUNNING");
-    await mark("testing", "COMPLETED");
-    await mark("preview", "COMPLETED");
-
-    await addChatMessage({
-      projectId: input.projectId,
-      jobId,
-      role: "assistant",
-      kind: "FILES",
-      content: he ? `${surgical.files.length} קבצים עודכנו` : `${surgical.files.length} files updated`,
-      payload: {
-        files: surgical.files.map((name) => ({
-          name,
-          action: "updated",
-          page: input.pageSlug ?? null,
-          summary: surgical.summary,
-        })),
-        technical: surgical.summary,
-      },
-    });
-    emitWorkspace(input.projectId, "preview", { path: `/preview/${input.projectId}/${input.pageSlug ?? "home"}` });
-    await updateJob(jobId, { status: "COMPLETED", completedAt: new Date(), result: { qa } as object });
+  const job = await prisma.buildJob.findUnique({ where: { id: jobId } });
+  if (job?.status === "COMPLETED") {
     await incrementUsage(input.userId, "aiRequests");
-  } catch (err) {
-    await failJob(jobId, input.projectId, err instanceof Error ? err.message : "Edit failed");
   }
 }
 
 export async function requestStop(projectId: string, userId: string) {
+  void userId;
   const job = await prisma.buildJob.findFirst({
     where: { projectId, status: { in: ["PLANNING", "RUNNING"] } },
     orderBy: { createdAt: "desc" },
@@ -599,6 +400,7 @@ export async function requestStop(projectId: string, userId: string) {
 }
 
 export async function applyStyle(projectId: string, userId: string, themeId: string, locale: "HE" | "EN") {
+  void userId;
   const job = await prisma.buildJob.findFirst({
     where: { projectId, kind: "PLAN", status: "AWAITING_APPROVAL" },
     orderBy: { createdAt: "desc" },

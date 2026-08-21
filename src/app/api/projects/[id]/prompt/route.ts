@@ -4,6 +4,12 @@ import { checkQuota } from "@/lib/quotas";
 import { requireProjectEditor } from "@/lib/workspace/access";
 import { startPlanJob, startEditJob } from "@/lib/workspace/orchestrator";
 import { readMemory } from "@/lib/ai/pipeline/memory";
+import {
+  AI_CREDITS_EXHAUSTED_CODE,
+  AI_CREDITS_EXHAUSTED_MESSAGE,
+  ensureSubscriptionCredits,
+  getCreditBalance,
+} from "@/lib/ai-credits";
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { error, session } = await requireApiAuth();
@@ -11,6 +17,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const quota = await checkQuota(session.user.id, "aiRequests");
   if (!quota.allowed) return jsonError("AI usage limit reached", 429);
+
+  await ensureSubscriptionCredits(session.user.id);
+  const balance = await getCreditBalance(session.user.id);
+  if (balance.remaining < 1) {
+    return jsonError(AI_CREDITS_EXHAUSTED_MESSAGE, 402, AI_CREDITS_EXHAUSTED_CODE);
+  }
 
   const { id } = await params;
   const project = await requireProjectEditor(session.user.id, id);
@@ -30,7 +42,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const locale = project.locale === "EN" ? "EN" : "HE";
   const memory = readMemory(project.settings);
   const empty = project.pages.length === 0;
-  const shouldPlan = Boolean(body.forcePlan || empty || !memory?.spec || /תבנה|build me|אתר חדש|from scratch/.test(prompt.toLowerCase()));
+  const shouldPlan = Boolean(
+    body.forcePlan || empty || !memory?.spec || /תבנה|build me|אתר חדש|from scratch/.test(prompt.toLowerCase())
+  );
 
   try {
     if (shouldPlan && !body.componentId) {

@@ -16,11 +16,13 @@ export async function createAnthropicAIRequest(input: {
   errorMessage?: string | null;
   tokensUsed?: number;
   costUsd?: number;
+  creditsUsed?: number;
   model?: string;
   completedAt?: Date | null;
 }) {
   const tokensUsed = Math.max(0, Math.floor(Number(input.tokensUsed ?? 0)));
   const costUsd = Number.isFinite(Number(input.costUsd)) ? Number(input.costUsd) : 0;
+  const creditsUsed = Math.max(0, Math.floor(Number(input.creditsUsed ?? 0)));
 
   return prisma.aIRequest.create({
     data: {
@@ -34,6 +36,7 @@ export async function createAnthropicAIRequest(input: {
       errorMessage: input.errorMessage ?? undefined,
       tokensUsed,
       costUsd,
+      creditsUsed,
       completedAt:
         input.completedAt === null
           ? undefined

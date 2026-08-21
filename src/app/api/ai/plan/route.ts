@@ -2,7 +2,12 @@ import { NextRequest } from "next/server";
 import { planFromPrompt } from "@/lib/ai/pipeline/planner";
 import { refineDesignWithClaude } from "@/lib/ai/pipeline/claude-design";
 import { isClaudeConfigured } from "@/lib/ai/anthropic-provider";
-import { createAnthropicAIRequest } from "@/lib/ai/log-request";
+import {
+  AICreditsExhaustedError,
+  AI_CREDITS_EXHAUSTED_CODE,
+  AI_CREDITS_EXHAUSTED_MESSAGE,
+  runClaudeWithCredits,
+} from "@/lib/ai-credits";
 import { requireApiAuth, jsonError, jsonSuccess } from "@/lib/api/helpers";
 import { checkQuota, incrementUsage } from "@/lib/quotas";
 
@@ -28,18 +33,21 @@ export async function POST(request: NextRequest) {
 
   try {
     let spec = planFromPrompt(prompt, body.projectType ? String(body.projectType) : undefined);
-    const design = await refineDesignWithClaude(spec);
-    spec = design.spec;
-
-    await createAnthropicAIRequest({
+    const { result: design } = await runClaudeWithCredits({
       userId: session.user.id,
       prompt,
-      status: "COMPLETED",
-      response: `Plan: ${spec.typeLabel}`,
-      model: design.model,
-      tokensUsed: design.tokensUsed,
-      costUsd: design.costUsd,
+      run: async () => {
+        const d = await refineDesignWithClaude(spec);
+        spec = d.spec;
+        return {
+          tokensUsed: d.tokensUsed,
+          costUsd: d.costUsd,
+          model: d.model,
+          explanation: `Plan: ${spec.typeLabel}`,
+        };
+      },
     });
+    void design;
     await incrementUsage(session.user.id, "aiRequests");
 
     return jsonSuccess({
@@ -52,14 +60,9 @@ export async function POST(request: NextRequest) {
       typeLabel: spec.typeLabel,
     });
   } catch (err) {
-    await createAnthropicAIRequest({
-      userId: session.user.id,
-      prompt,
-      status: "FAILED",
-      errorMessage: err instanceof Error ? err.message : "Anthropic plan failed",
-      tokensUsed: 0,
-      costUsd: 0,
-    });
+    if (err instanceof AICreditsExhaustedError) {
+      return jsonError(AI_CREDITS_EXHAUSTED_MESSAGE, 402, AI_CREDITS_EXHAUSTED_CODE);
+    }
     return jsonError(err instanceof Error ? err.message : "AI planning failed", 502);
   }
 }

@@ -31,6 +31,7 @@ async function main() {
         deployments: 50,
         storageMb: 5120,
         aiRequests: 500,
+        aiCredits: 8000,
         bandwidthGb: 100,
         teamMembers: 5,
         domains: 3,
@@ -41,9 +42,40 @@ async function main() {
       monthlyPriceUsd: 3500,
       yearlyPriceUsd: 42000,
       trialDays: 14,
+      quotas: {
+        projects: 10,
+        deployments: 50,
+        storageMb: 5120,
+        aiRequests: 500,
+        aiCredits: 8000,
+        bandwidthGb: 100,
+        teamMembers: 5,
+        domains: 3,
+        versions: 100,
+      },
     },
   });
   console.log("Plan:", plan.name);
+
+  const creditPackages = [
+    { slug: "credits-5k", name: "5,000 Credits", credits: 5000, priceUsdCents: 1000, sortOrder: 1 },
+    { slug: "credits-15k", name: "15,000 Credits", credits: 15000, priceUsdCents: 2500, sortOrder: 2 },
+    { slug: "credits-35k", name: "35,000 Credits", credits: 35000, priceUsdCents: 5000, sortOrder: 3 },
+  ];
+  for (const pkg of creditPackages) {
+    await prisma.aICreditPackage.upsert({
+      where: { slug: pkg.slug },
+      create: pkg,
+      update: {
+        name: pkg.name,
+        credits: pkg.credits,
+        priceUsdCents: pkg.priceUsdCents,
+        sortOrder: pkg.sortOrder,
+        isActive: true,
+      },
+    });
+  }
+  console.log("AI credit packages seeded");
 
   const brandSettings = [
     { key: "brand.name", value: "Liraz AI Builder", category: "brand" },
